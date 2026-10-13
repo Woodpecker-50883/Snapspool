@@ -30,7 +30,7 @@
 
 - [x] ビルドした `.app` に entitlements が実際に埋め込まれる状態にする。対象は `xcodegen.yml`。満たすこと: ビルドした `Snapspool.app` に対して `codesign -d --entitlements - <app>` を実行すると `com.apple.security.app-sandbox`・`com.apple.security.assets.pictures.read-write`・`com.apple.security.files.user-selected.read-write`・`com.apple.security.files.bookmarks.app-scope` が出力される / Apple Developer証明書を設定していない状態でもビルドとテストが成功する / 署名を無効化しない。（**Why**: 1周目は `CODE_SIGNING_ALLOWED: NO` だったため、`ENABLE_APP_SANDBOX: YES` と書いてもentitlementsが埋め込まれず、実行時にサンドボックスが効いていなかった。この状態では以降のサンドボックス関連の検証がすべて意味を失う）
 - [x] テストからアプリ本体のモジュールを参照できる状態にする。対象は `xcodegen.yml` と `Tests/`。満たすこと: `@testable import Snapspool` を含むテストがコンパイルでき、アプリ側のinternalな型をテストから参照できる / `xcodegen generate --spec xcodegen.yml && xcodebuild test -scheme Snapspool -destination 'platform=macOS' -derivedDataPath build/DerivedData -quiet` が成功する。（**Why**: Phase 2以降のテストはすべてアプリ本体のロジックを直接検証するため、これが無いと着手できない）
-- [ ] 基盤の設定を検証するテストを、ビルド成果物に対する検証に置き換える。対象は `Tests/`。満たすこと: `xcodegen.yml` を読み直して同じ値と比較する形の検証を残さない / ビルドされた `Snapspool.app` の `Info.plist` を実際に読んで `LSUIElement` が有効であることを確認する / ビルドされたバイナリの最小OSバージョンが15.0であることを成果物から確認する / `Snapspool.xcodeproj` と `build/` がgitの管理対象外であることを実際の無視判定で確認する / これらの設定を壊すとテストが落ちる。（**Why**: 1周目のテストは設定ファイルを読み直して同じ値と比較していただけで、設定が実際に効いていなくても通ってしまう状態だった）
+- [x] 基盤の設定を検証するテストを、ビルド成果物に対する検証に置き換える。対象は `Tests/`。満たすこと: `xcodegen.yml` を読み直して同じ値と比較する形の検証を残さない / ビルドされた `Snapspool.app` の `Info.plist` を実際に読んで `LSUIElement` が有効であることを確認する / ビルドされたバイナリの最小OSバージョンが15.0であることを成果物から確認する / `Snapspool.xcodeproj` と `build/` がgitの管理対象外であることを実際の無視判定で確認する / これらの設定を壊すとテストが落ちる。（**Why**: 1周目のテストは設定ファイルを読み直して同じ値と比較していただけで、設定が実際に効いていなくても通ってしまう状態だった）
 
 ## Phase 2: 監視エンジン
 
@@ -67,3 +67,4 @@
 ## Phase 9: 目視・実機確認
 
 - [ ] `requirements.md` の「完了条件」22項目を手元のmacOSで実際に操作して確認する。 <!-- BLOCKED: 目視確認が必要。実装エージェントでは判定できない -->
+- [ ] `Tests/AppConfigurationTests.swift` のGit管理対象外テストを、`Snapspool.xcodeproj/project.pbxproj` と `build/DerivedData` だけでなく `Snapspool.xcodeproj/`・`build/` 配下全体について追跡ファイルがないことを検証するよう修正し、各ディレクトリ内の別ファイルが追跡された場合にもテストが失敗するようにする。
