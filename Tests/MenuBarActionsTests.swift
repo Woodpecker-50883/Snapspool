@@ -13,13 +13,24 @@ final class MenuBarActionsTests: XCTestCase {
         XCTAssertEqual(MenuBarItem.quit.rawValue, "終了")
     }
 
-    func testPlaceholderActionsDoNotTerminateApplication() {
+    func testPauseActionTogglesMonitoringAndDoesNotTerminateApplication() {
         var terminationCount = 0
-        let actions = MenuBarActions {
+        let monitor = ClipboardMonitor(pasteboard: FakeMenuPasteboard()) { _ in }
+        let actions = MenuBarActions(clipboardMonitor: monitor) {
             terminationCount += 1
         }
 
+        XCTAssertFalse(actions.isMonitoringPaused)
+        XCTAssertEqual(actions.monitoringMenuTitle, "監視の一時停止")
+
         actions.pauseMonitoring()
+        XCTAssertTrue(actions.isMonitoringPaused)
+        XCTAssertEqual(actions.monitoringMenuTitle, "監視を再開")
+
+        actions.pauseMonitoring()
+        XCTAssertFalse(actions.isMonitoringPaused)
+        XCTAssertEqual(actions.monitoringMenuTitle, "監視の一時停止")
+
         actions.openSettings()
 
         XCTAssertEqual(terminationCount, 0)
@@ -27,7 +38,7 @@ final class MenuBarActionsTests: XCTestCase {
 
     func testQuitTerminatesApplication() {
         var terminationCount = 0
-        let actions = MenuBarActions {
+        let actions = MenuBarActions(clipboardMonitor: ClipboardMonitor(pasteboard: FakeMenuPasteboard()) { _ in }) {
             terminationCount += 1
         }
 
@@ -35,4 +46,10 @@ final class MenuBarActionsTests: XCTestCase {
 
         XCTAssertEqual(terminationCount, 1)
     }
+}
+
+@MainActor
+private final class FakeMenuPasteboard: ClipboardPasteboardReading {
+    var changeCount = 0
+    var items: [any PasteboardItemReading] = []
 }

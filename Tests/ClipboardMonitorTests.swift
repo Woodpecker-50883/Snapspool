@@ -26,6 +26,48 @@ final class ClipboardMonitorTests: XCTestCase {
         XCTAssertEqual(detected.count, 1)
     }
 
+    func testUsesCurrentChangeCountAsStartupBaseline() {
+        let pasteboard = FakePasteboard(changeCount: 10, items: [item(text: "before launch")])
+        var detected: [ClipboardContent] = []
+        let monitor = ClipboardMonitor(pasteboard: pasteboard) { detected.append($0) }
+
+        monitor.poll()
+
+        XCTAssertTrue(detected.isEmpty)
+    }
+
+    func testPauseSuppressesDetectionAndResumeDiscardsChangesMadeWhilePaused() {
+        let pasteboard = FakePasteboard(changeCount: 10, items: [item(text: "initial")])
+        var detected: [ClipboardContent] = []
+        let monitor = ClipboardMonitor(pasteboard: pasteboard) { detected.append($0) }
+
+        monitor.pause()
+        pasteboard.changeCount = 11
+        pasteboard.items = [item(text: "while paused")]
+        monitor.poll()
+        XCTAssertTrue(detected.isEmpty)
+
+        monitor.resume()
+        monitor.poll()
+        XCTAssertTrue(detected.isEmpty)
+
+        pasteboard.changeCount = 12
+        pasteboard.items = [item(text: "after resume")]
+        monitor.poll()
+        XCTAssertEqual(detected, [.text(data: Data("after resume".utf8))])
+    }
+
+    func testPausedStateIsNotPersistedAcrossMonitorInstances() {
+        let pasteboard = FakePasteboard(changeCount: 1, items: [])
+        let firstMonitor = ClipboardMonitor(pasteboard: pasteboard) { _ in }
+        firstMonitor.pause()
+
+        let relaunchedMonitor = ClipboardMonitor(pasteboard: pasteboard) { _ in }
+
+        XCTAssertTrue(firstMonitor.isPaused)
+        XCTAssertFalse(relaunchedMonitor.isPaused)
+    }
+
     func testSelectsEachSupportedType() {
         let representations: [(NSPasteboard.PasteboardType, ClipboardContent)] = [
             (.init("public.png"), .image(data: Data([1]), type: .init("public.png"))),

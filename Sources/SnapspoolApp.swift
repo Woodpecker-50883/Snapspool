@@ -4,11 +4,21 @@ import SwiftUI
 @main
 @MainActor
 struct SnapspoolApp: App {
-    private let menuActions = MenuBarActions()
+    private let clipboardMonitor: ClipboardMonitor
+    private let menuActions: MenuBarActions
+
+    init() {
+        let clipboardMonitor = ClipboardMonitor { _ in
+            // History and image persistence are connected in later phases.
+        }
+        self.clipboardMonitor = clipboardMonitor
+        menuActions = MenuBarActions(clipboardMonitor: clipboardMonitor)
+        clipboardMonitor.start()
+    }
 
     var body: some Scene {
         MenuBarExtra("Snapspool", systemImage: "doc.on.clipboard") {
-            Button(MenuBarItem.pauseMonitoring.rawValue) {
+            Button(menuActions.monitoringMenuTitle) {
                 menuActions.pauseMonitoring()
             }
             Button(MenuBarItem.settings.rawValue) {

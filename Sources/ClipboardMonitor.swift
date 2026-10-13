@@ -83,6 +83,8 @@ final class ClipboardMonitor: NSObject {
     private let didDetectContent: (ClipboardContent) -> Void
     private var lastChangeCount: Int
     private var timer: Timer?
+    private var isRunning = false
+    private(set) var isPaused = false
 
     init(
         pasteboard: any ClipboardPasteboardReading = SystemClipboardPasteboard(),
@@ -95,22 +97,55 @@ final class ClipboardMonitor: NSObject {
     }
 
     func start() {
-        guard timer == nil else { return }
-        timer = Timer.scheduledTimer(
+        isRunning = true
+        scheduleTimerIfNeeded()
+    }
+
+    func stop() {
+        isRunning = false
+        invalidateTimer()
+    }
+
+    func pause() {
+        guard !isPaused else { return }
+        isPaused = true
+        invalidateTimer()
+    }
+
+    func resume() {
+        guard isPaused else { return }
+
+        // Treat the clipboard's current state as the new baseline so content
+        // copied while monitoring was paused is never emitted after resuming.
+        lastChangeCount = pasteboard.changeCount
+        isPaused = false
+        scheduleTimerIfNeeded()
+    }
+
+    func togglePaused() {
+        isPaused ? resume() : pause()
+    }
+
+    private func scheduleTimerIfNeeded() {
+        guard isRunning, !isPaused, timer == nil else { return }
+        let timer = Timer(
             timeInterval: Self.pollingInterval,
             target: self,
             selector: #selector(timerDidFire),
             userInfo: nil,
             repeats: true
         )
+        self.timer = timer
+        RunLoop.main.add(timer, forMode: .common)
     }
 
-    func stop() {
+    private func invalidateTimer() {
         timer?.invalidate()
         timer = nil
     }
 
     func poll() {
+        guard !isPaused else { return }
         let currentChangeCount = pasteboard.changeCount
         guard currentChangeCount > lastChangeCount else { return }
         lastChangeCount = currentChangeCount

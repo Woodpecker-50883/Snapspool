@@ -8,16 +8,29 @@ enum MenuBarItem: String, CaseIterable {
 
 @MainActor
 final class MenuBarActions {
+    private let clipboardMonitor: ClipboardMonitor
     private let terminateApplication: () -> Void
 
-    init(terminateApplication: @escaping () -> Void = {
-        NSApplication.shared.terminate(nil)
-    }) {
+    init(
+        clipboardMonitor: ClipboardMonitor = ClipboardMonitor { _ in },
+        terminateApplication: @escaping () -> Void = { NSApplication.shared.terminate(nil) }
+    ) {
+        self.clipboardMonitor = clipboardMonitor
         self.terminateApplication = terminateApplication
     }
 
+    var isMonitoringPaused: Bool {
+        clipboardMonitor.isPaused
+    }
+
+    var monitoringMenuTitle: String {
+        isMonitoringPaused
+            ? "監視を再開"
+            : MenuBarItem.pauseMonitoring.rawValue
+    }
+
     func pauseMonitoring() {
-        // Implemented with the clipboard monitor in a later task.
+        clipboardMonitor.togglePaused()
     }
 
     func openSettings() {
