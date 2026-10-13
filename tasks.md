@@ -16,10 +16,21 @@
   実装エージェントのサンドボックスはワークスペース外への書き込みを許さないため、
   DerivedDataが `~/Library/Developer` に出ると失敗する
 
+**テスト実行について**（1周目で判明）: 実装エージェントのサンドボックス内では
+`xcodebuild test` が `testmanagerd` に接続できず失敗する。実装中の自己検証は、
+ビルド済みのテストバンドルを直接実行して行うこと。`loop.py` 側のテスト実行は
+サンドボックス外で走るため `xcodebuild test` がそのまま通る（ここが正式な合否判定）。
+
 ## Phase 1: プロジェクト基盤
 
 - [x] `xcodegen.yml` を作り、macOSアプリターゲット `Snapspool` と単体テストターゲットを定義する。対象は `xcodegen.yml` / `Sources/` / `Tests/` / `Snapspool.entitlements` / `Info.plist` / `.gitignore`。満たすこと: 最小macOSは15.0 / Dockアイコンとウィンドウを出さない常駐アプリとして起動する（`LSUIElement`）/ App Sandbox有効で `com.apple.security.assets.pictures.read-write`・`com.apple.security.files.user-selected.read-write`・`com.apple.security.files.bookmarks.app-scope` を持つ / Apple Developer証明書の設定なしに `xcodebuild test` が成功する / `xcodegen generate --spec xcodegen.yml && xcodebuild test -scheme Snapspool -destination 'platform=macOS' -derivedDataPath build/DerivedData -quiet` が成功する / 生成物（`Snapspool.xcodeproj`・`build/`）が `.gitignore` に入っていてコミットされない。
-- [ ] メニューバー常駐の骨格を実装する。満たすこと: 起動してもDockアイコンとウィンドウが出ない / メニューバーアイコンから「監視の一時停止」「設定」「終了」を開ける / 「終了」でアプリが終了する。他2項目の中身は後続タスクで実装するため、この時点では空の反応でよい。
+- [x] メニューバー常駐の骨格を実装する。満たすこと: 起動してもDockアイコンとウィンドウが出ない / メニューバーアイコンから「監視の一時停止」「設定」「終了」を開ける / 「終了」でアプリが終了する。他2項目の中身は後続タスクで実装するため、この時点では空の反応でよい。
+
+## Phase 1.5: 基盤の修正（1周目のコードレビュー指摘）
+
+- [ ] ビルドした `.app` に entitlements が実際に埋め込まれる状態にする。対象は `xcodegen.yml`。満たすこと: ビルドした `Snapspool.app` に対して `codesign -d --entitlements - <app>` を実行すると `com.apple.security.app-sandbox`・`com.apple.security.assets.pictures.read-write`・`com.apple.security.files.user-selected.read-write`・`com.apple.security.files.bookmarks.app-scope` が出力される / Apple Developer証明書を設定していない状態でもビルドとテストが成功する / 署名を無効化しない。（**Why**: 1周目は `CODE_SIGNING_ALLOWED: NO` だったため、`ENABLE_APP_SANDBOX: YES` と書いてもentitlementsが埋め込まれず、実行時にサンドボックスが効いていなかった。この状態では以降のサンドボックス関連の検証がすべて意味を失う）
+- [ ] テストからアプリ本体のモジュールを参照できる状態にする。対象は `xcodegen.yml` と `Tests/`。満たすこと: `@testable import Snapspool` を含むテストがコンパイルでき、アプリ側のinternalな型をテストから参照できる / `xcodegen generate --spec xcodegen.yml && xcodebuild test -scheme Snapspool -destination 'platform=macOS' -derivedDataPath build/DerivedData -quiet` が成功する。（**Why**: Phase 2以降のテストはすべてアプリ本体のロジックを直接検証するため、これが無いと着手できない）
+- [ ] 基盤の設定を検証するテストを、ビルド成果物に対する検証に置き換える。対象は `Tests/`。満たすこと: `xcodegen.yml` を読み直して同じ値と比較する形の検証を残さない / ビルドされた `Snapspool.app` の `Info.plist` を実際に読んで `LSUIElement` が有効であることを確認する / ビルドされたバイナリの最小OSバージョンが15.0であることを成果物から確認する / `Snapspool.xcodeproj` と `build/` がgitの管理対象外であることを実際の無視判定で確認する / これらの設定を壊すとテストが落ちる。（**Why**: 1周目のテストは設定ファイルを読み直して同じ値と比較していただけで、設定が実際に効いていなくても通ってしまう状態だった）
 
 ## Phase 2: 監視エンジン
 
