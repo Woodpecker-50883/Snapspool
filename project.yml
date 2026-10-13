@@ -1,0 +1,65 @@
+# Snapspool 用の自律開発ループ設定
+#
+# 使い方:
+#   cd ~/dev/projects/Snapspool
+#   python3 ~/dev/tools/loop/loop.py
+#
+# ルールの詳細は vault の core/LOOP_RULES.md を参照。
+#
+# prompt_file は指定していないため ~/dev/tools/loop/default_prompt.txt が使われる。
+# requirements.md はこのディレクトリの実体で、vault 側
+# (~/dev/vault/projects/Snapspool/requirements.md) が symlink。
+# GitHubアプリから読めるようにするため、Cuepeatとは逆向きにしてある。
+#
+# 【注意】このファイル名は XcodeGen の既定スペック名と同じ。
+# XcodeGen のスペックは xcodegen.yml に置き、--spec で明示的に指定している。
+# project.yml を XcodeGen に食わせたり上書きさせたりしないこと。
+
+name: Snapspool
+tasks_file: tasks.md
+
+# DerivedData をワークスペース内(build/)に出すのは必須。Codexの workspace-write
+# サンドボックスはワークスペース外への書き込みを許さないため、既定の
+# ~/Library/Developer/Xcode/DerivedData に出すとテストが失敗する。
+test_command: xcodegen generate --spec xcodegen.yml && xcodebuild test -scheme Snapspool -destination 'platform=macOS' -derivedDataPath build/DerivedData -quiet
+
+claude_command: codex exec -s workspace-write
+stuck_threshold: 3
+
+# リモート(github.com/Woodpecker-50883/Snapspool)は設定済み。
+# tasks.md の進捗をスマホのGitHubアプリから読むために有効にしている。
+git_push: true
+
+review_log_dir: ~/dev/vault/projects/Snapspool/review
+progress_log_dir: ~/dev/vault/projects/Snapspool
+
+reviews:
+  - name: code
+    command: >-
+      codex exec review "Look at the current uncommitted changes in this
+      git repository (git diff, including untracked files). Review ONLY
+      non-test source files (anything under Tests/ or named *Tests.swift
+      is out of scope — a separate reviewer handles those). Focus on
+      correctness, edge cases, and security. Pay particular attention to
+      App Sandbox correctness: security-scoped resource access must be
+      balanced with stopAccessingSecurityScopedResource, and the sandbox
+      must never be disabled to work around a problem."
+  - name: tests
+    command: >-
+      codex exec review "Look at the current uncommitted changes in this
+      git repository (git diff, including untracked files). Review ONLY
+      test files (anything under Tests/ or named *Tests.swift).
+      Non-test implementation files are out of scope — a separate
+      reviewer handles those. Judge whether the tests would actually fail
+      if the implementation were subtly broken; flag weak/tautological
+      assertions and missing edge cases."
+  - name: conformance
+    command: >-
+      codex exec -s workspace-write "requirements.md を読み、直前の
+      uncommitted diff(git diff で確認)がどの要件に対応しているか
+      特定してください。その要件に対して、機能・仕様面で漏れがないか
+      確認してください。未着手の別タスクの機能が無いことは漏れとして
+      扱わないでください。問題が無ければ何もせず、その旨だけ報告して
+      ください。問題があれば、tasks.md の末尾に、修正が必要な内容を
+      1行1タスクとして「- [ ] <具体的な修正内容>」の形式で追記して
+      ください(既存のタスクは変更しないこと)。"
