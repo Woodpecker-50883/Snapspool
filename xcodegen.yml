@@ -31,7 +31,8 @@ targets:
     platform: macOS
     sources:
       - path: Tests
-      - path: Sources/MenuBarActions.swift
+    dependencies:
+      - target: Snapspool
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.snapspool.SnapspoolTests

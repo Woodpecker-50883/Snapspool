@@ -1,4 +1,5 @@
 import XCTest
+@testable import Snapspool
 
 final class ProjectConfigurationTests: XCTestCase {
     private var projectRoot: URL {

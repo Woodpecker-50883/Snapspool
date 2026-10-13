@@ -1,4 +1,5 @@
 import XCTest
+@testable import Snapspool
 
 @MainActor
 final class MenuBarActionsTests: XCTestCase {
