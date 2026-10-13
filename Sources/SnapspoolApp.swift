@@ -8,8 +8,10 @@ struct SnapspoolApp: App {
     private let menuActions: MenuBarActions
 
     init() {
-        let clipboardMonitor = ClipboardMonitor { _ in
-            // History and image persistence are connected in later phases.
+        let imageFolderSaver = ImageFolderSaver()
+        let clipboardMonitor = ClipboardMonitor { content in
+            // Failure recovery and user notification are added in the next phase.
+            _ = try? imageFolderSaver.save(content)
         }
         self.clipboardMonitor = clipboardMonitor
         menuActions = MenuBarActions(clipboardMonitor: clipboardMonitor)
