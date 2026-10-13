@@ -18,7 +18,7 @@
 
 ## Phase 1: プロジェクト基盤
 
-- [ ] `xcodegen.yml` を作り、macOSアプリターゲット `Snapspool` と単体テストターゲットを定義する。対象は `xcodegen.yml` / `Sources/` / `Tests/` / `Snapspool.entitlements` / `Info.plist` / `.gitignore`。満たすこと: 最小macOSは15.0 / Dockアイコンとウィンドウを出さない常駐アプリとして起動する（`LSUIElement`）/ App Sandbox有効で `com.apple.security.assets.pictures.read-write`・`com.apple.security.files.user-selected.read-write`・`com.apple.security.files.bookmarks.app-scope` を持つ / Apple Developer証明書の設定なしに `xcodebuild test` が成功する / `xcodegen generate --spec xcodegen.yml && xcodebuild test -scheme Snapspool -destination 'platform=macOS' -derivedDataPath build/DerivedData -quiet` が成功する / 生成物（`Snapspool.xcodeproj`・`build/`）が `.gitignore` に入っていてコミットされない。
+- [x] `xcodegen.yml` を作り、macOSアプリターゲット `Snapspool` と単体テストターゲットを定義する。対象は `xcodegen.yml` / `Sources/` / `Tests/` / `Snapspool.entitlements` / `Info.plist` / `.gitignore`。満たすこと: 最小macOSは15.0 / Dockアイコンとウィンドウを出さない常駐アプリとして起動する（`LSUIElement`）/ App Sandbox有効で `com.apple.security.assets.pictures.read-write`・`com.apple.security.files.user-selected.read-write`・`com.apple.security.files.bookmarks.app-scope` を持つ / Apple Developer証明書の設定なしに `xcodebuild test` が成功する / `xcodegen generate --spec xcodegen.yml && xcodebuild test -scheme Snapspool -destination 'platform=macOS' -derivedDataPath build/DerivedData -quiet` が成功する / 生成物（`Snapspool.xcodeproj`・`build/`）が `.gitignore` に入っていてコミットされない。
 - [ ] メニューバー常駐の骨格を実装する。満たすこと: 起動してもDockアイコンとウィンドウが出ない / メニューバーアイコンから「監視の一時停止」「設定」「終了」を開ける / 「終了」でアプリが終了する。他2項目の中身は後続タスクで実装するため、この時点では空の反応でよい。
 
 ## Phase 2: 監視エンジン

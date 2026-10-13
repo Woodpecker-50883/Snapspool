@@ -1,0 +1,12 @@
+# XcodeGen output
+Snapspool.xcodeproj/
+
+# Build output (kept inside the workspace by project convention)
+build/
+
+# Xcode user state
+*.xcuserstate
+xcuserdata/
+
+# macOS
+.DS_Store
