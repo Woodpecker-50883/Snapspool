@@ -6,14 +6,14 @@ import SwiftUI
 struct SnapspoolApp: App {
     private let clipboardMonitor: ClipboardMonitor
     private let menuActions: MenuBarActions
-    private let imageIngestionService: ImageIngestionService
+    private let historyStore: HistoryStore
 
     init() {
-        let imageIngestionService = ImageIngestionService()
+        let historyStore = HistoryStore()
         let clipboardMonitor = ClipboardMonitor { content in
-            imageIngestionService.ingest(content)
+            historyStore.ingest(content)
         }
-        self.imageIngestionService = imageIngestionService
+        self.historyStore = historyStore
         self.clipboardMonitor = clipboardMonitor
         menuActions = MenuBarActions(clipboardMonitor: clipboardMonitor)
         clipboardMonitor.start()
