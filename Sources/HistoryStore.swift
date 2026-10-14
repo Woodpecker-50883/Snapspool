@@ -22,6 +22,7 @@ struct PendingImageHistoryEntry: Equatable {
     fileprivate let detectionOrder: UInt64
 }
 
+@MainActor
 final class HistoryStore {
     static let defaultImageLimit = 30
     static let defaultTextLimit = 30
@@ -81,17 +82,22 @@ final class HistoryStore {
             detectionOrder: pending.detectionOrder
         ))
         sortByDetectionOrder()
-        trimImagesToLimit()
+        _ = trimImagesToLimit()
     }
 
-    func ingest(_ content: ClipboardContent) {
-        guard let pending = recordDetection(of: content) else { return }
-        completeImageDetection(pending, with: imageIngestionService.ingest(content))
+    @discardableResult
+    func ingest(_ content: ClipboardContent) -> Task<Void, Never>? {
+        guard let pending = recordDetection(of: content) else { return nil }
+        return Task { [imageIngestionService] in
+            let imageEntry = await imageIngestionService.ingest(content)
+            completeImageDetection(pending, with: imageEntry)
+        }
     }
 
-    func setImageLimit(_ newValue: Int) {
+    @discardableResult
+    func setImageLimit(_ newValue: Int) -> Task<Void, Never>? {
         imageLimit = Self.clampedLimit(newValue)
-        trimImagesToLimit()
+        return trimImagesToLimit()
     }
 
     func setTextLimit(_ newValue: Int) {
@@ -135,15 +141,22 @@ final class HistoryStore {
         entries.sort { $0.detectionOrder > $1.detectionOrder }
     }
 
-    private func trimImagesToLimit() {
+    private func trimImagesToLimit() -> Task<Void, Never>? {
+        var removedImageEntries: [ImageHistoryEntry] = []
         while imageCount > imageLimit {
             guard let index = entries.lastIndex(where: { entry in
                 if case .image = entry.content { return true }
                 return false
-            }) else { return }
+            }) else { break }
             let removed = entries.remove(at: index)
             if case let .image(imageEntry) = removed.content {
-                imageIngestionService.remove(imageEntry)
+                removedImageEntries.append(imageEntry)
+            }
+        }
+        guard !removedImageEntries.isEmpty else { return nil }
+        return Task { [imageIngestionService] in
+            for imageEntry in removedImageEntries {
+                await imageIngestionService.remove(imageEntry)
             }
         }
     }

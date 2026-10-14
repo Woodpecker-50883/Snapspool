@@ -6,22 +6,25 @@ enum ImageFolderSaverError: Error {
     case pngEncodingFailed
 }
 
-struct ImageFolderSaver {
+struct ImageFolderSaver: @unchecked Sendable {
     private let destinationDirectory: URL
     private let fileManager: FileManager
     private let now: () -> Date
     private let namingTimeZone: TimeZone
+    private let willSave: @Sendable () -> Void
 
     init(
         destinationDirectory: URL = Self.defaultDestinationDirectory(),
         fileManager: FileManager = .default,
         now: @escaping () -> Date = Date.init,
-        calendar: Calendar = .current
+        calendar: Calendar = .current,
+        willSave: @escaping @Sendable () -> Void = {}
     ) {
         self.destinationDirectory = destinationDirectory
         self.fileManager = fileManager
         self.now = now
         self.namingTimeZone = calendar.timeZone
+        self.willSave = willSave
     }
 
     static func defaultDestinationDirectory(
@@ -40,6 +43,7 @@ struct ImageFolderSaver {
     @discardableResult
     func save(_ content: ClipboardContent) throws -> URL? {
         guard case let .image(data, _) = content else { return nil }
+        willSave()
 
         guard let bitmap = NSBitmapImageRep(data: data) else {
             throw ImageFolderSaverError.invalidImageData

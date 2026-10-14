@@ -1,12 +1,12 @@
 import Foundation
 import UserNotifications
 
-protocol ImageSaveNotifying {
+protocol ImageSaveNotifying: Sendable {
     func notifyDestinationSaveFailed()
     func notifyFallbackSaveFailed()
 }
 
-final class UserNotificationImageSaveNotifier: ImageSaveNotifying {
+final class UserNotificationImageSaveNotifier: ImageSaveNotifying, @unchecked Sendable {
     private let center: UNUserNotificationCenter
 
     init(center: UNUserNotificationCenter = .current()) {
@@ -42,7 +42,7 @@ final class UserNotificationImageSaveNotifier: ImageSaveNotifying {
     }
 }
 
-struct ImageHistoryEntry: Identifiable, Equatable {
+struct ImageHistoryEntry: Identifiable, Equatable, Sendable {
     let id: UUID
     let fileURL: URL
     let isFallback: Bool
@@ -59,7 +59,7 @@ struct ImageHistoryEntry: Identifiable, Equatable {
     }
 }
 
-final class ImageIngestionService {
+actor ImageIngestionService {
     private let destinationSaver: ImageFolderSaver
     private let fallbackSaver: ImageFolderSaver
     private let notifier: any ImageSaveNotifying

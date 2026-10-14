@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
 
-enum ClipboardContent: Equatable {
+enum ClipboardContent: Equatable, @unchecked Sendable {
     case image(data: Data, type: NSPasteboard.PasteboardType)
     case text(data: Data)
 }

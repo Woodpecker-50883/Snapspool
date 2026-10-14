@@ -35,7 +35,7 @@ final class ImageIngestionServiceTests: XCTestCase {
         )
     }
 
-    func testDestinationFailureStoresRestorableFallbackAndNotifies() throws {
+    func testDestinationFailureStoresRestorableFallbackAndNotifies() async throws {
         let notifier = NotificationSpy()
         let service = try makeService(
             destinationBlocked: true,
@@ -43,17 +43,19 @@ final class ImageIngestionServiceTests: XCTestCase {
             notifier: notifier
         )
 
-        let entry = try XCTUnwrap(service.ingest(try imageContent()))
+        let ingestedEntry = await service.ingest(try imageContent())
+        let entry = try XCTUnwrap(ingestedEntry)
+        let entries = await service.entries
 
         XCTAssertTrue(entry.isFallback)
-        XCTAssertEqual(service.entries, [entry])
+        XCTAssertEqual(entries, [entry])
         XCTAssertTrue(FileManager.default.fileExists(atPath: entry.fileURL.path))
         XCTAssertEqual(try entry.restorationPNGData(), try Data(contentsOf: entry.fileURL))
         XCTAssertEqual(notifier.destinationFailures, 1)
         XCTAssertEqual(notifier.fallbackFailures, 0)
     }
 
-    func testFallbackFailureDoesNotAddHistoryAndNotifies() throws {
+    func testFallbackFailureDoesNotAddHistoryAndNotifies() async throws {
         let notifier = NotificationSpy()
         let service = try makeService(
             destinationBlocked: true,
@@ -61,41 +63,47 @@ final class ImageIngestionServiceTests: XCTestCase {
             notifier: notifier
         )
 
-        XCTAssertNil(service.ingest(try imageContent()))
-        XCTAssertTrue(service.entries.isEmpty)
+        let entry = await service.ingest(try imageContent())
+        let entries = await service.entries
+        XCTAssertNil(entry)
+        XCTAssertTrue(entries.isEmpty)
         XCTAssertEqual(notifier.destinationFailures, 0)
         XCTAssertEqual(notifier.fallbackFailures, 1)
     }
 
-    func testRemovingFallbackHistoryDeletesFallbackFile() throws {
+    func testRemovingFallbackHistoryDeletesFallbackFile() async throws {
         let service = try makeService(
             destinationBlocked: true,
             fallbackBlocked: false,
             notifier: NotificationSpy()
         )
-        let entry = try XCTUnwrap(service.ingest(try imageContent()))
+        let ingestedEntry = await service.ingest(try imageContent())
+        let entry = try XCTUnwrap(ingestedEntry)
 
-        service.remove(entry)
+        await service.remove(entry)
 
-        XCTAssertTrue(service.entries.isEmpty)
+        let entries = await service.entries
+        XCTAssertTrue(entries.isEmpty)
         XCTAssertFalse(FileManager.default.fileExists(atPath: entry.fileURL.path))
     }
 
-    func testRemovingNormallySavedHistoryKeepsArchivedImageFile() throws {
+    func testRemovingNormallySavedHistoryKeepsArchivedImageFile() async throws {
         let service = try makeService(
             destinationBlocked: false,
             fallbackBlocked: false,
             notifier: NotificationSpy()
         )
-        let entry = try XCTUnwrap(service.ingest(try imageContent()))
+        let ingestedEntry = await service.ingest(try imageContent())
+        let entry = try XCTUnwrap(ingestedEntry)
 
-        service.remove(entry)
+        await service.remove(entry)
 
-        XCTAssertTrue(service.entries.isEmpty)
+        let entries = await service.entries
+        XCTAssertTrue(entries.isEmpty)
         XCTAssertTrue(FileManager.default.fileExists(atPath: entry.fileURL.path))
     }
 
-    func testTextIsNotSavedOrAddedToImageHistory() throws {
+    func testTextIsNotSavedOrAddedToImageHistory() async throws {
         let notifier = NotificationSpy()
         let service = try makeService(
             destinationBlocked: false,
@@ -103,10 +111,30 @@ final class ImageIngestionServiceTests: XCTestCase {
             notifier: notifier
         )
 
-        XCTAssertNil(service.ingest(.text(data: Data("text".utf8))))
-        XCTAssertTrue(service.entries.isEmpty)
+        let entry = await service.ingest(.text(data: Data("text".utf8)))
+        let entries = await service.entries
+        XCTAssertNil(entry)
+        XCTAssertTrue(entries.isEmpty)
         XCTAssertEqual(notifier.destinationFailures, 0)
         XCTAssertEqual(notifier.fallbackFailures, 0)
+    }
+
+    func testPNGEncodingAndFileWritingRunOffTheMainThread() async throws {
+        let observation = SaveThreadObservation()
+        let destination = try directoryURL(named: "destination", blocked: false)
+        let fallback = try directoryURL(named: "fallback", blocked: false)
+        let service = ImageIngestionService(
+            destinationSaver: ImageFolderSaver(
+                destinationDirectory: destination,
+                willSave: { observation.recordCurrentThread() }
+            ),
+            fallbackSaver: ImageFolderSaver(destinationDirectory: fallback),
+            notifier: NotificationSpy()
+        )
+
+        _ = await service.ingest(try imageContent())
+
+        XCTAssertEqual(observation.wasMainThread, false)
     }
 
     private func makeService(
@@ -150,7 +178,7 @@ final class ImageIngestionServiceTests: XCTestCase {
     }
 }
 
-private final class NotificationSpy: ImageSaveNotifying {
+private final class NotificationSpy: ImageSaveNotifying, @unchecked Sendable {
     private(set) var destinationFailures = 0
     private(set) var fallbackFailures = 0
 
@@ -160,5 +188,18 @@ private final class NotificationSpy: ImageSaveNotifying {
 
     func notifyFallbackSaveFailed() {
         fallbackFailures += 1
+    }
+}
+
+private final class SaveThreadObservation: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: Bool?
+
+    var wasMainThread: Bool? {
+        lock.withLock { value }
+    }
+
+    func recordCurrentThread() {
+        lock.withLock { value = Thread.isMainThread }
     }
 }

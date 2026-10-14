@@ -2,6 +2,7 @@ import AppKit
 import XCTest
 @testable import Snapspool
 
+@MainActor
 final class HistoryStoreTests: XCTestCase {
     private var temporaryDirectory: URL!
     private var imageService: ImageIngestionService!
@@ -38,13 +39,13 @@ final class HistoryStoreTests: XCTestCase {
         XCTAssertEqual(clamped.textLimit, 100)
     }
 
-    func testImageAndTextLimitsEvictOnlyOldestEntryOfMatchingKind() throws {
+    func testImageAndTextLimitsEvictOnlyOldestEntryOfMatchingKind() async throws {
         let store = HistoryStore(imageLimit: 10, textLimit: 10, imageIngestionService: imageService)
         for index in 0..<11 {
             store.ingest(.text(data: Data("text-\(index)".utf8)))
         }
         for _ in 0..<11 {
-            store.ingest(try imageContent())
+            await store.ingest(try imageContent())?.value
         }
 
         XCTAssertEqual(store.textCount, 10)
@@ -53,19 +54,21 @@ final class HistoryStoreTests: XCTestCase {
         XCTAssertTrue(textValues(in: store).contains("text-1"))
     }
 
-    func testReducingLimitsImmediatelyRemovesOldestMatchingEntries() throws {
+    func testReducingLimitsImmediatelyRemovesOldestMatchingEntries() async throws {
         let store = HistoryStore(imageLimit: 20, textLimit: 20, imageIngestionService: imageService)
         for index in 0..<12 {
             store.ingest(.text(data: Data("text-\(index)".utf8)))
-            store.ingest(try imageContent())
+            await store.ingest(try imageContent())?.value
         }
 
         store.setTextLimit(10)
-        store.setImageLimit(10)
+        let imageRemovalTask = store.setImageLimit(10)
+        await imageRemovalTask?.value
 
         XCTAssertEqual(store.textCount, 10)
         XCTAssertEqual(store.imageCount, 10)
-        XCTAssertEqual(imageService.entries.count, 10)
+        let serviceEntryCount = await imageService.entries.count
+        XCTAssertEqual(serviceEntryCount, 10)
         XCTAssertFalse(textValues(in: store).contains("text-0"))
         XCTAssertFalse(textValues(in: store).contains("text-1"))
     }
@@ -82,21 +85,21 @@ final class HistoryStoreTests: XCTestCase {
         XCTAssertEqual(textValues(in: store), ["same", "other"])
     }
 
-    func testImagesAreNotDeduplicated() throws {
+    func testImagesAreNotDeduplicated() async throws {
         let store = HistoryStore(imageIngestionService: imageService)
         let content = try imageContent()
-        store.ingest(content)
-        store.ingest(content)
+        await store.ingest(content)?.value
+        await store.ingest(content)?.value
         XCTAssertEqual(store.imageCount, 2)
     }
 
-    func testLateImageCompletionKeepsDetectionOrder() throws {
+    func testLateImageCompletionKeepsDetectionOrder() async throws {
         let store = HistoryStore(imageIngestionService: imageService)
         let image = try imageContent()
         let pending = try XCTUnwrap(store.recordDetection(of: image))
         store.ingest(.text(data: Data("newer".utf8)))
 
-        store.completeImageDetection(pending, with: imageService.ingest(image))
+        store.completeImageDetection(pending, with: await imageService.ingest(image))
 
         XCTAssertEqual(store.entries.count, 2)
         guard case .text = store.entries[0].content,
@@ -105,9 +108,23 @@ final class HistoryStoreTests: XCTestCase {
         }
     }
 
-    func testImageHistoryKeepsOnlyFileReferenceNotOriginalClipboardBytes() throws {
+    func testAsyncImageIngestionKeepsDetectionOrderWhileMainActorHandlesNewerText() async throws {
         let store = HistoryStore(imageIngestionService: imageService)
-        store.ingest(try imageContent())
+
+        let imageTask = try XCTUnwrap(store.ingest(try imageContent()))
+        store.ingest(.text(data: Data("newer".utf8)))
+        await imageTask.value
+
+        XCTAssertEqual(store.entries.count, 2)
+        guard case .text = store.entries[0].content,
+              case .image = store.entries[1].content else {
+            return XCTFail("Async completion must not replace clipboard detection order")
+        }
+    }
+
+    func testImageHistoryKeepsOnlyFileReferenceNotOriginalClipboardBytes() async throws {
+        let store = HistoryStore(imageIngestionService: imageService)
+        await store.ingest(try imageContent())?.value
 
         guard case let .image(entry) = try XCTUnwrap(store.entries.first).content else {
             return XCTFail("Expected image history")
@@ -150,7 +167,7 @@ final class HistoryStoreTests: XCTestCase {
     }
 }
 
-private final class SilentNotifier: ImageSaveNotifying {
+private final class SilentNotifier: ImageSaveNotifying, @unchecked Sendable {
     func notifyDestinationSaveFailed() {}
     func notifyFallbackSaveFailed() {}
 }

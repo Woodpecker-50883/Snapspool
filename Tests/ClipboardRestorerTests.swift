@@ -161,7 +161,7 @@ private struct DictionaryPasteboardItem: PasteboardItemReading {
     }
 }
 
-private final class ClipboardRestorerSilentNotifier: ImageSaveNotifying {
+private final class ClipboardRestorerSilentNotifier: ImageSaveNotifying, @unchecked Sendable {
     func notifyDestinationSaveFailed() {}
     func notifyFallbackSaveFailed() {}
 }
