@@ -36,20 +36,44 @@ final class ClipboardRestorerTests: XCTestCase {
     }
 
     @MainActor
-    func testSystemPasteboardWriterBuildsNativeItemWithTextAndMarker() throws {
+    func testSystemPasteboardWriterClearsExistingContentsAndWritesEveryRepresentation() throws {
+        let pasteboard = NSPasteboard.withUniqueName()
+        defer { pasteboard.releaseGlobally() }
+
+        let staleType = NSPasteboard.PasteboardType("app.snapspool.stale-test-data")
+        let staleItem = NSPasteboardItem()
+        staleItem.setData(Data("stale".utf8), forType: staleType)
+        guard pasteboard.writeObjects([staleItem]) else {
+            throw XCTSkip("The current test sandbox denies access to the pasteboard server")
+        }
+
         let textData = Data("production adapter".utf8)
-        let item = SystemClipboardPasteboardWriter.makeItem(with: [
+        let pngData = Data([0x89, 0x50, 0x4e, 0x47])
+        let representations = [
             PasteboardRepresentation(
                 type: ClipboardContentSelector.plainTextType,
                 data: textData
             ),
             PasteboardRepresentation(
+                type: ClipboardContentSelector.pngType,
+                data: pngData
+            ),
+            PasteboardRepresentation(
                 type: ClipboardContentSelector.restoredType,
                 data: Data()
             ),
-        ])
+        ]
 
+        let didWrite = SystemClipboardPasteboardWriter(pasteboard: pasteboard)
+            .replaceContents(with: representations)
+
+        XCTAssertTrue(didWrite)
+        let items = try XCTUnwrap(pasteboard.pasteboardItems)
+        XCTAssertEqual(items.count, 1)
+        let item = try XCTUnwrap(items.first)
+        XCTAssertNil(item.data(forType: staleType))
         XCTAssertEqual(item.data(forType: ClipboardContentSelector.plainTextType), textData)
+        XCTAssertEqual(item.data(forType: ClipboardContentSelector.pngType), pngData)
         XCTAssertEqual(item.data(forType: ClipboardContentSelector.restoredType), Data())
     }
 

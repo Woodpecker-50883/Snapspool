@@ -115,4 +115,4 @@
 ## Phase 10: 出荷前の棚卸し
 
 - [ ] `findings.md`（`~/dev/vault/projects/Snapspool/findings.md`）の未対応指摘をゼロにする。満たすこと: 各指摘について、修正したものは行頭を `- [x]` に書き換えて対応内容を1行で添える / 修正しないものは先送りの理由を1行で添える / P1が1件も未対応で残らない。 <!-- BLOCKED: 指摘を直すか先送りするかの判断は人間側で行う（LOOP_RULES「出荷前に findings.md をゼロにする」） -->
-- [ ] `Tests/ClipboardRestorerTests.swift` で一時的な `NSPasteboard` に対して `SystemClipboardPasteboardWriter.replaceContents` を実際に呼び、既存内容のクリアと全表現の書き込みを検証して、本番pasteboard書き込み処理を壊した場合にテストが失敗するよう修正する。
+- [x] `Tests/ClipboardRestorerTests.swift` で一時的な `NSPasteboard` に対して `SystemClipboardPasteboardWriter.replaceContents` を実際に呼び、既存内容のクリアと全表現の書き込みを検証して、本番pasteboard書き込み処理を壊した場合にテストが失敗するよう修正する。
