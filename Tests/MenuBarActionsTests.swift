@@ -29,6 +29,19 @@ final class MenuBarActionsTests: XCTestCase {
         XCTAssertEqual(historyOpenCount, 1)
     }
 
+    func testBuiltMenuDispatchesSettingsAction() throws {
+        var settingsOpenCount = 0
+        let actions = MenuBarActions(
+            clipboardMonitor: ClipboardMonitor(pasteboard: FakeMenuPasteboard()) { _ in },
+            showSettings: { settingsOpenCount += 1 }
+        )
+        let settingsItem = try XCTUnwrap(actions.makeMenu().item(at: 2))
+
+        activate(settingsItem)
+
+        XCTAssertEqual(settingsOpenCount, 1)
+    }
+
     func testRegistrationWarningIsShownWithoutDisablingHistoryMenu() throws {
         var historyOpenCount = 0
         let actions = MenuBarActions(

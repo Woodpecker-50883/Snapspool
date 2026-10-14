@@ -1,7 +1,7 @@
 import Carbon.HIToolbox
 import Foundation
 
-struct GlobalShortcut: Equatable {
+struct GlobalShortcut: Equatable, Sendable {
     let keyCode: UInt32
     let modifiers: UInt32
 
@@ -133,7 +133,7 @@ private func carbonHotKeyEventHandler(
 @MainActor
 final class GlobalHotKeyController {
     private let registrar: any GlobalHotKeyRegistering
-    private let configuredShortcut: GlobalShortcut
+    private(set) var configuredShortcut: GlobalShortcut
     private let showHistoryPicker: @MainActor @Sendable () -> Void
 
     private(set) var hasRegistrationWarning = false
@@ -163,5 +163,22 @@ final class GlobalHotKeyController {
 
     func stop() {
         registrar.unregister()
+    }
+
+    /// Tries a user-selected shortcut immediately. A failed candidate is never
+    /// accepted: the previously active shortcut is registered again.
+    @discardableResult
+    func updateShortcut(_ candidate: GlobalShortcut) -> Bool {
+        guard candidate != configuredShortcut else { return true }
+        let previous = configuredShortcut
+        if registrar.register(candidate, handler: showHistoryPicker) {
+            configuredShortcut = candidate
+            hasRegistrationWarning = false
+            return true
+        }
+
+        let restored = registrar.register(previous, handler: showHistoryPicker)
+        hasRegistrationWarning = !restored
+        return false
     }
 }

@@ -10,19 +10,36 @@ public final class SnapspoolRuntime {
     private let historyStore: HistoryStore
     private let historyPickerController: HistoryPickerController
     private let globalHotKeyController: GlobalHotKeyController
+    public let settings: AppSettings
 
     public init() {
-        let historyStore = HistoryStore()
+        let settings = AppSettings()
+        let imageDestination = MutableImageDestination(url: settings.destinationURL)
+        let imageService = ImageIngestionService(
+            destinationSaverProvider: { imageDestination.makeSaver() }
+        )
+        let historyStore = HistoryStore(
+            imageLimit: settings.imageLimit,
+            textLimit: settings.textLimit,
+            imageIngestionService: imageService
+        )
         let pickerController = HistoryPickerController(historyStore: historyStore)
         let clipboardMonitor = ClipboardMonitor { content in
             historyStore.ingest(content)
         }
 
         self.historyStore = historyStore
+        self.settings = settings
         self.clipboardMonitor = clipboardMonitor
         historyPickerController = pickerController
         globalHotKeyController = GlobalHotKeyController(
+            configuredShortcut: settings.shortcut,
             showHistoryPicker: { pickerController.show() }
+        )
+        settings.connect(
+            historyStore: historyStore,
+            hotKeyController: globalHotKeyController,
+            imageDestination: imageDestination
         )
         menuActions = MenuBarActions(
             clipboardMonitor: clipboardMonitor,
@@ -49,16 +66,25 @@ final class MenuBarActions: NSObject {
     private let showHistoryPicker: () -> Void
     private let terminateApplication: () -> Void
     private let hasHotKeyRegistrationWarning: () -> Bool
+    private let showSettings: () -> Void
 
     init(
         clipboardMonitor: ClipboardMonitor = ClipboardMonitor { _ in },
         showHistoryPicker: @escaping () -> Void = {},
         hasHotKeyRegistrationWarning: @escaping () -> Bool = { false },
+        showSettings: @escaping () -> Void = {
+            NSApplication.shared.sendAction(
+                Selector(("showSettingsWindow:")),
+                to: nil,
+                from: nil
+            )
+        },
         terminateApplication: @escaping () -> Void = { NSApplication.shared.terminate(nil) }
     ) {
         self.clipboardMonitor = clipboardMonitor
         self.showHistoryPicker = showHistoryPicker
         self.hasHotKeyRegistrationWarning = hasHotKeyRegistrationWarning
+        self.showSettings = showSettings
         self.terminateApplication = terminateApplication
     }
 
@@ -99,7 +125,7 @@ final class MenuBarActions: NSObject {
     }
 
     @objc func openSettings(_ sender: Any? = nil) {
-        // Implemented with the settings screen in a later task.
+        showSettings()
     }
 
     @objc func quit(_ sender: Any? = nil) {

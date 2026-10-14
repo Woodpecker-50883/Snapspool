@@ -67,7 +67,7 @@ struct ImageHistoryEntry: Identifiable, Equatable, Sendable {
 }
 
 actor ImageIngestionService {
-    private let destinationSaver: ImageFolderSaver
+    private let destinationSaver: @Sendable () -> ImageFolderSaver
     private let fallbackSaver: ImageFolderSaver
     private let notifier: any ImageSaveNotifying
     private let fileManager: FileManager
@@ -82,7 +82,21 @@ actor ImageIngestionService {
         notifier: any ImageSaveNotifying = UserNotificationImageSaveNotifier(),
         fileManager: FileManager = .default
     ) {
-        self.destinationSaver = destinationSaver
+        self.destinationSaver = { destinationSaver }
+        self.fallbackSaver = fallbackSaver
+        self.notifier = notifier
+        self.fileManager = fileManager
+    }
+
+    init(
+        destinationSaverProvider: @escaping @Sendable () -> ImageFolderSaver,
+        fallbackSaver: ImageFolderSaver = ImageFolderSaver(
+            destinationDirectory: ImageIngestionService.defaultFallbackDirectory()
+        ),
+        notifier: any ImageSaveNotifying = UserNotificationImageSaveNotifier(),
+        fileManager: FileManager = .default
+    ) {
+        self.destinationSaver = destinationSaverProvider
         self.fallbackSaver = fallbackSaver
         self.notifier = notifier
         self.fileManager = fileManager
@@ -106,7 +120,7 @@ actor ImageIngestionService {
         guard case .image = content else { return nil }
 
         do {
-            guard let fileURL = try destinationSaver.save(content) else { return nil }
+            guard let fileURL = try destinationSaver().save(content) else { return nil }
             let entry = ImageHistoryEntry(fileURL: fileURL, isFallback: false)
             entries.insert(entry, at: 0)
             return entry

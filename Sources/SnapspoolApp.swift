@@ -19,7 +19,7 @@ struct SnapspoolApp: App {
         .menuBarExtraStyle(.menu)
 
         Settings {
-            EmptyView()
+            AppSettingsView(settings: runtime.settings)
         }
     }
 }
