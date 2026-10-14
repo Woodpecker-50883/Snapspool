@@ -72,20 +72,25 @@ final class BuildArtifactConfigurationTests: XCTestCase {
     }
 
     func testGeneratedProjectAndBuildDirectoryAreIgnoredAndUntracked() throws {
-        let generatedPaths = [
-            "Snapspool.xcodeproj/project.pbxproj",
-            "build/DerivedData",
+        let generatedDirectories = [
+            "Snapspool.xcodeproj",
+            "build",
         ]
 
-        for path in generatedPaths {
-            let ignored = try runGit(["check-ignore", "--quiet", "--no-index", path])
-            XCTAssertEqual(ignored.status, 0, "Expected Git to ignore \(path)")
+        for directory in generatedDirectories {
+            let nestedProbe = "\(directory)/.snapspool-ignore-probe"
+            let ignored = try runGit(["check-ignore", "--quiet", "--no-index", nestedProbe])
+            XCTAssertEqual(
+                ignored.status,
+                0,
+                "Expected Git to ignore every file under \(directory)/"
+            )
 
-            let tracked = try runGit(["ls-files", "--", path])
+            let tracked = try runGit(["ls-files", "--", "\(directory)/"])
             XCTAssertEqual(tracked.status, 0, tracked.standardError)
             XCTAssertTrue(
                 tracked.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                "Generated path is tracked by Git: \(path)"
+                "Generated directory contains files tracked by Git: \(directory)/\n\(tracked.standardOutput)"
             )
         }
     }
