@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 
 /// The app target's narrow entry point into the shared implementation module.
 /// Keeping assembly here ensures the app and tests both use the single compiled
@@ -10,6 +11,7 @@ public final class SnapspoolRuntime {
     private let historyStore: HistoryStore
     private let historyPickerController: HistoryPickerController
     private let globalHotKeyController: GlobalHotKeyController
+    private let settingsWindowController: SettingsWindowController
     public let settings: AppSettings
     public let monitoringState: MonitoringState
 
@@ -25,6 +27,7 @@ public final class SnapspoolRuntime {
             imageIngestionService: imageService
         )
         let pickerController = HistoryPickerController(historyStore: historyStore)
+        let settingsWindowController = SettingsWindowController(settings: settings)
         let monitoringState = MonitoringState()
         let clipboardMonitor = ClipboardMonitor(monitoringState: monitoringState) { content in
             historyStore.ingest(content)
@@ -35,6 +38,7 @@ public final class SnapspoolRuntime {
         self.monitoringState = monitoringState
         self.clipboardMonitor = clipboardMonitor
         historyPickerController = pickerController
+        self.settingsWindowController = settingsWindowController
         globalHotKeyController = GlobalHotKeyController(
             configuredShortcut: settings.shortcut,
             showHistoryPicker: { pickerController.show() }
@@ -49,7 +53,8 @@ public final class SnapspoolRuntime {
             showHistoryPicker: { pickerController.show() },
             hasHotKeyRegistrationWarning: { [globalHotKeyController] in
                 globalHotKeyController.hasRegistrationWarning
-            }
+            },
+            showSettings: { settingsWindowController.show() }
         )
     }
 
@@ -60,6 +65,63 @@ public final class SnapspoolRuntime {
 
     public func makeMenu() -> NSMenu {
         menuActions.makeMenu()
+    }
+}
+
+/// Owns the AppKit status item for the lifetime of the application. Using an
+/// explicit `NSStatusItem` makes creation independent of SwiftUI scene timing.
+@MainActor
+public final class MenuBarStatusItemController {
+    let statusItem: NSStatusItem
+
+    public init(menu: NSMenu) {
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        if let button = statusItem.button {
+            button.image = NSImage(
+                systemSymbolName: "doc.on.clipboard",
+                accessibilityDescription: "Snapspool"
+            )
+            button.image?.isTemplate = true
+            button.toolTip = "Snapspool"
+        }
+        statusItem.menu = menu
+    }
+
+    deinit {
+        MainActor.assumeIsolated {
+            NSStatusBar.system.removeStatusItem(statusItem)
+        }
+    }
+}
+
+@MainActor
+private final class SettingsWindowController: NSWindowController, NSWindowDelegate {
+    init(settings: AppSettings) {
+        let window = NSWindow(contentViewController: NSHostingController(
+            rootView: AppSettingsView(settings: settings)
+        ))
+        window.title = L10n.string("menu.settings")
+        window.styleMask = [.titled, .closable, .miniaturizable]
+        window.isReleasedWhenClosed = false
+        window.center()
+        super.init(window: window)
+        window.delegate = self
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func show() {
+        showWindow(nil)
+        window?.center()
+        NSApplication.shared.activate(ignoringOtherApps: true)
+        window?.makeKeyAndOrderFront(nil)
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        NSApplication.shared.setActivationPolicy(.accessory)
     }
 }
 

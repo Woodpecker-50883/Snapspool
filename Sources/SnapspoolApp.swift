@@ -3,49 +3,26 @@ import Snapspool
 import SwiftUI
 
 @main
-@MainActor
 struct SnapspoolApp: App {
-    private let runtime: SnapspoolRuntime
-
-    init() {
-        runtime = SnapspoolRuntime()
-        runtime.start()
-    }
+    @NSApplicationDelegateAdaptor(SnapspoolAppDelegate.self) private var appDelegate
 
     var body: some Scene {
-        MenuBarExtra("Snapspool", systemImage: "doc.on.clipboard") {
-            MenuBarContent(runtime: runtime)
-        }
-        .menuBarExtraStyle(.menu)
-
         Settings {
-            AppSettingsView(settings: runtime.settings)
+            EmptyView()
         }
     }
 }
 
 @MainActor
-private struct MenuBarContent: View {
-    let runtime: SnapspoolRuntime
-    @ObservedObject private var monitoringState: MonitoringState
+private final class SnapspoolAppDelegate: NSObject, NSApplicationDelegate {
+    private var runtime: SnapspoolRuntime?
+    private var statusItemController: MenuBarStatusItemController?
 
-    init(runtime: SnapspoolRuntime) {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        let runtime = SnapspoolRuntime()
+        runtime.start()
+
         self.runtime = runtime
-        monitoringState = runtime.monitoringState
-    }
-
-    var body: some View {
-        let menu = runtime.makeMenu()
-        ForEach(Array(menu.items.enumerated()), id: \.offset) { _, item in
-            if item.isSeparatorItem {
-                Divider()
-            } else {
-                Button(item.title) {
-                    guard let action = item.action else { return }
-                    NSApplication.shared.sendAction(action, to: item.target, from: item)
-                }
-                .disabled(!item.isEnabled)
-            }
-        }
+        statusItemController = MenuBarStatusItemController(menu: runtime.makeMenu())
     }
 }
