@@ -11,6 +11,7 @@ public final class SnapspoolRuntime {
     private let historyPickerController: HistoryPickerController
     private let globalHotKeyController: GlobalHotKeyController
     public let settings: AppSettings
+    public let monitoringState: MonitoringState
 
     public init() {
         let settings = AppSettings()
@@ -24,12 +25,14 @@ public final class SnapspoolRuntime {
             imageIngestionService: imageService
         )
         let pickerController = HistoryPickerController(historyStore: historyStore)
-        let clipboardMonitor = ClipboardMonitor { content in
+        let monitoringState = MonitoringState()
+        let clipboardMonitor = ClipboardMonitor(monitoringState: monitoringState) { content in
             historyStore.ingest(content)
         }
 
         self.historyStore = historyStore
         self.settings = settings
+        self.monitoringState = monitoringState
         self.clipboardMonitor = clipboardMonitor
         historyPickerController = pickerController
         globalHotKeyController = GlobalHotKeyController(

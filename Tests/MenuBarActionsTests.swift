@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import XCTest
 @testable import Snapspool
 
@@ -75,17 +76,37 @@ final class MenuBarActionsTests: XCTestCase {
     }
 
     func testBuiltMenuPauseActionTogglesMonitorAndUpdatesVisibleTitle() throws {
-        let monitor = ClipboardMonitor(pasteboard: FakeMenuPasteboard()) { _ in }
+        let monitoringState = MonitoringState()
+        let monitor = ClipboardMonitor(
+            pasteboard: FakeMenuPasteboard(),
+            monitoringState: monitoringState
+        ) { _ in }
         let actions = MenuBarActions(clipboardMonitor: monitor)
         let pauseItem = try XCTUnwrap(actions.makeMenu().item(at: 1))
+        var publishedStates: [Bool] = []
+        let stateUpdates = monitoringState.$isPaused
+            .dropFirst()
+            .sink { publishedStates.append($0) }
 
         activate(pauseItem)
         XCTAssertTrue(monitor.isPaused)
+        XCTAssertTrue(monitoringState.isPaused)
         XCTAssertEqual(pauseItem.title, L10n.string("menu.resume-monitoring"))
+        XCTAssertEqual(
+            try XCTUnwrap(actions.makeMenu().item(at: 1)).title,
+            L10n.string("menu.resume-monitoring")
+        )
 
         activate(pauseItem)
         XCTAssertFalse(monitor.isPaused)
+        XCTAssertFalse(monitoringState.isPaused)
         XCTAssertEqual(pauseItem.title, L10n.string("menu.pause-monitoring"))
+        XCTAssertEqual(
+            try XCTUnwrap(actions.makeMenu().item(at: 1)).title,
+            L10n.string("menu.pause-monitoring")
+        )
+        XCTAssertEqual(publishedStates, [true, false])
+        withExtendedLifetime(stateUpdates) {}
     }
 
     func testBuiltMenuQuitActionTerminatesApplication() throws {

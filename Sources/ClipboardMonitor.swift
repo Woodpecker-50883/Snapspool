@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import Foundation
 
 enum ClipboardContent: Equatable, @unchecked Sendable {
@@ -80,6 +81,19 @@ enum ClipboardContentSelector {
 }
 
 @MainActor
+public final class MonitoringState: ObservableObject {
+    @Published public private(set) var isPaused: Bool
+
+    init(isPaused: Bool = false) {
+        self.isPaused = isPaused
+    }
+
+    fileprivate func setPaused(_ isPaused: Bool) {
+        self.isPaused = isPaused
+    }
+}
+
+@MainActor
 final class ClipboardMonitor: NSObject {
     static let pollingInterval: TimeInterval = 0.3
 
@@ -88,13 +102,19 @@ final class ClipboardMonitor: NSObject {
     private var lastChangeCount: Int
     private var timer: Timer?
     private var isRunning = false
-    private(set) var isPaused = false
+    let monitoringState: MonitoringState
+
+    var isPaused: Bool {
+        monitoringState.isPaused
+    }
 
     init(
         pasteboard: any ClipboardPasteboardReading = SystemClipboardPasteboard(),
+        monitoringState: MonitoringState = MonitoringState(),
         didDetectContent: @escaping (ClipboardContent) -> Void
     ) {
         self.pasteboard = pasteboard
+        self.monitoringState = monitoringState
         self.didDetectContent = didDetectContent
         lastChangeCount = pasteboard.changeCount
         super.init()
@@ -112,7 +132,7 @@ final class ClipboardMonitor: NSObject {
 
     func pause() {
         guard !isPaused else { return }
-        isPaused = true
+        monitoringState.setPaused(true)
         invalidateTimer()
     }
 
@@ -122,7 +142,7 @@ final class ClipboardMonitor: NSObject {
         // Treat the clipboard's current state as the new baseline so content
         // copied while monitoring was paused is never emitted after resuming.
         lastChangeCount = pasteboard.changeCount
-        isPaused = false
+        monitoringState.setPaused(false)
         scheduleTimerIfNeeded()
     }
 

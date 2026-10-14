@@ -14,7 +14,7 @@ struct SnapspoolApp: App {
 
     var body: some Scene {
         MenuBarExtra("Snapspool", systemImage: "doc.on.clipboard") {
-            MenuBarContent(menu: runtime.makeMenu())
+            MenuBarContent(runtime: runtime)
         }
         .menuBarExtraStyle(.menu)
 
@@ -26,9 +26,16 @@ struct SnapspoolApp: App {
 
 @MainActor
 private struct MenuBarContent: View {
-    let menu: NSMenu
+    let runtime: SnapspoolRuntime
+    @ObservedObject private var monitoringState: MonitoringState
+
+    init(runtime: SnapspoolRuntime) {
+        self.runtime = runtime
+        monitoringState = runtime.monitoringState
+    }
 
     var body: some View {
+        let menu = runtime.makeMenu()
         ForEach(Array(menu.items.enumerated()), id: \.offset) { _, item in
             if item.isSeparatorItem {
                 Divider()
