@@ -46,19 +46,29 @@ final class BuildArtifactConfigurationTests: XCTestCase {
     func testBuiltExecutableRequiresMacOS15() throws {
         let executableURL = try builtAppURL()
             .appendingPathComponent("Contents/MacOS/Snapspool")
-        let result = try run(
-            "/usr/bin/xcrun",
-            arguments: ["vtool", "-show-build", executableURL.path]
+        let architecturesResult = try run(
+            "/usr/bin/lipo",
+            arguments: ["-archs", executableURL.path]
         )
-        XCTAssertEqual(result.status, 0, result.standardError)
-        XCTAssertTrue(result.standardOutput.contains("platform MACOS"), result.standardOutput)
-        XCTAssertNotNil(
-            result.standardOutput.range(
-                of: #"(?m)^\s*minos 15\.0(?:\.0)?\s*$"#,
-                options: .regularExpression
-            ),
-            result.standardOutput
-        )
+        XCTAssertEqual(architecturesResult.status, 0, architecturesResult.standardError)
+        let architectures = architecturesResult.standardOutput.split(whereSeparator: \.isWhitespace).map(String.init)
+        XCTAssertFalse(architectures.isEmpty, "No architecture slices found in \(executableURL.path)")
+
+        for architecture in architectures {
+            let result = try run(
+                "/usr/bin/xcrun",
+                arguments: ["vtool", "-arch", architecture, "-show-build", executableURL.path]
+            )
+            XCTAssertEqual(result.status, 0, result.standardError)
+            XCTAssertTrue(result.standardOutput.contains("platform MACOS"), "\(architecture):\n\(result.standardOutput)")
+            XCTAssertNotNil(
+                result.standardOutput.range(
+                    of: #"(?m)^\s*minos 15\.0(?:\.0)?\s*$"#,
+                    options: .regularExpression
+                ),
+                "\(architecture):\n\(result.standardOutput)"
+            )
+        }
     }
 
     func testGeneratedProjectAndBuildDirectoryAreIgnoredAndUntracked() throws {
@@ -100,7 +110,10 @@ final class BuildArtifactConfigurationTests: XCTestCase {
             directory = parent
         }
 
-        throw XCTSkip("Could not locate the built Snapspool.app next to the test bundle")
+        return try XCTUnwrap(
+            nil,
+            "Could not locate the built Snapspool.app next to the test bundle at \(Bundle(for: Self.self).bundleURL.path)"
+        )
     }
 
     private func runGit(_ arguments: [String]) throws -> CommandResult {

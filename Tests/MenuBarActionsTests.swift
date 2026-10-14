@@ -1,50 +1,67 @@
+import AppKit
 import XCTest
 @testable import Snapspool
 
 @MainActor
 final class MenuBarActionsTests: XCTestCase {
-    func testMenuContainsRequiredItemsInOrder() {
-        XCTAssertEqual(
-            MenuBarItem.allCases,
-            [.pauseMonitoring, .settings, .quit]
+    func testBuiltMenuContainsRequiredItemsInOrder() {
+        let actions = MenuBarActions(
+            clipboardMonitor: ClipboardMonitor(pasteboard: FakeMenuPasteboard()) { _ in }
         )
-        XCTAssertEqual(MenuBarItem.pauseMonitoring.rawValue, "監視の一時停止")
-        XCTAssertEqual(MenuBarItem.settings.rawValue, "設定")
-        XCTAssertEqual(MenuBarItem.quit.rawValue, "終了")
+
+        let menu = actions.makeMenu()
+
+        XCTAssertEqual(menu.items.map(\.title), ["履歴", "監視の一時停止", "設定", "", "終了"])
+        XCTAssertEqual(menu.items.map(\.isSeparatorItem), [false, false, false, true, false])
     }
 
-    func testPauseActionTogglesMonitoringAndDoesNotTerminateApplication() {
-        var terminationCount = 0
+    func testBuiltMenuDispatchesHistoryAction() throws {
+        var historyOpenCount = 0
+        let actions = MenuBarActions(
+            clipboardMonitor: ClipboardMonitor(pasteboard: FakeMenuPasteboard()) { _ in },
+            showHistoryPicker: { historyOpenCount += 1 }
+        )
+        let menu = actions.makeMenu()
+        let historyItem = try XCTUnwrap(menu.item(at: 0))
+
+        activate(historyItem)
+
+        XCTAssertEqual(historyOpenCount, 1)
+    }
+
+    func testBuiltMenuPauseActionTogglesMonitorAndUpdatesVisibleTitle() throws {
         let monitor = ClipboardMonitor(pasteboard: FakeMenuPasteboard()) { _ in }
-        let actions = MenuBarActions(clipboardMonitor: monitor) {
-            terminationCount += 1
-        }
+        let actions = MenuBarActions(clipboardMonitor: monitor)
+        let pauseItem = try XCTUnwrap(actions.makeMenu().item(at: 1))
 
-        XCTAssertFalse(actions.isMonitoringPaused)
-        XCTAssertEqual(actions.monitoringMenuTitle, "監視の一時停止")
+        activate(pauseItem)
+        XCTAssertTrue(monitor.isPaused)
+        XCTAssertEqual(pauseItem.title, "監視を再開")
 
-        actions.pauseMonitoring()
-        XCTAssertTrue(actions.isMonitoringPaused)
-        XCTAssertEqual(actions.monitoringMenuTitle, "監視を再開")
+        activate(pauseItem)
+        XCTAssertFalse(monitor.isPaused)
+        XCTAssertEqual(pauseItem.title, "監視の一時停止")
+    }
 
-        actions.pauseMonitoring()
-        XCTAssertFalse(actions.isMonitoringPaused)
-        XCTAssertEqual(actions.monitoringMenuTitle, "監視の一時停止")
-
-        actions.openSettings()
+    func testBuiltMenuQuitActionTerminatesApplication() throws {
+        var terminationCount = 0
+        let actions = MenuBarActions(
+            clipboardMonitor: ClipboardMonitor(pasteboard: FakeMenuPasteboard()) { _ in },
+            terminateApplication: { terminationCount += 1 }
+        )
+        let quitItem = try XCTUnwrap(actions.makeMenu().item(at: 4))
 
         XCTAssertEqual(terminationCount, 0)
+
+        activate(quitItem)
+        XCTAssertEqual(terminationCount, 1)
     }
 
-    func testQuitTerminatesApplication() {
-        var terminationCount = 0
-        let actions = MenuBarActions(clipboardMonitor: ClipboardMonitor(pasteboard: FakeMenuPasteboard()) { _ in }) {
-            terminationCount += 1
-        }
-
-        actions.quit()
-
-        XCTAssertEqual(terminationCount, 1)
+    private func activate(_ item: NSMenuItem) {
+        XCTAssertTrue(
+            NSApplication.shared.sendAction(item.action!, to: item.target, from: item),
+            "Menu item action was not dispatched: \(item.title)"
+        )
     }
 }
 
