@@ -1,33 +1,20 @@
 import AppKit
+import Snapspool
 import SwiftUI
 
 @main
 @MainActor
 struct SnapspoolApp: App {
-    private let clipboardMonitor: ClipboardMonitor
-    private let menuActions: MenuBarActions
-    private let historyStore: HistoryStore
-    private let historyPickerController: HistoryPickerController
+    private let runtime: SnapspoolRuntime
 
     init() {
-        let historyStore = HistoryStore()
-        let pickerController = HistoryPickerController(historyStore: historyStore)
-        let clipboardMonitor = ClipboardMonitor { content in
-            historyStore.ingest(content)
-        }
-        self.historyStore = historyStore
-        self.clipboardMonitor = clipboardMonitor
-        historyPickerController = pickerController
-        menuActions = MenuBarActions(
-            clipboardMonitor: clipboardMonitor,
-            showHistoryPicker: { pickerController.show() }
-        )
-        clipboardMonitor.start()
+        runtime = SnapspoolRuntime()
+        runtime.start()
     }
 
     var body: some Scene {
         MenuBarExtra("Snapspool", systemImage: "doc.on.clipboard") {
-            MenuBarContent(menu: menuActions.makeMenu())
+            MenuBarContent(menu: runtime.makeMenu())
         }
         .menuBarExtraStyle(.menu)
 

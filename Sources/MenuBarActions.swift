@@ -1,5 +1,40 @@
 import AppKit
 
+/// The app target's narrow entry point into the shared implementation module.
+/// Keeping assembly here ensures the app and tests both use the single compiled
+/// copy of the implementation provided by the static library target.
+@MainActor
+public final class SnapspoolRuntime {
+    private let clipboardMonitor: ClipboardMonitor
+    private let menuActions: MenuBarActions
+    private let historyStore: HistoryStore
+    private let historyPickerController: HistoryPickerController
+
+    public init() {
+        let historyStore = HistoryStore()
+        let pickerController = HistoryPickerController(historyStore: historyStore)
+        let clipboardMonitor = ClipboardMonitor { content in
+            historyStore.ingest(content)
+        }
+
+        self.historyStore = historyStore
+        self.clipboardMonitor = clipboardMonitor
+        historyPickerController = pickerController
+        menuActions = MenuBarActions(
+            clipboardMonitor: clipboardMonitor,
+            showHistoryPicker: { pickerController.show() }
+        )
+    }
+
+    public func start() {
+        clipboardMonitor.start()
+    }
+
+    public func makeMenu() -> NSMenu {
+        menuActions.makeMenu()
+    }
+}
+
 @MainActor
 final class MenuBarActions: NSObject {
     private let clipboardMonitor: ClipboardMonitor

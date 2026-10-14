@@ -88,7 +88,7 @@
 
 ## Phase 5.7: ソースの二重コンパイルの解消
 
-- [ ] アプリ本体とテスト用ライブラリで同じソースを二重にコンパイルしない構成にする。対象 `xcodegen.yml`。満たすこと: `Sources/` 配下の共通コードがビルド全体で1回だけコンパイルされる / アプリターゲットはそのコードをライブラリとしてリンクし、同じソースを再コンパイルしない / テストが検証するコードと、アプリに実際に入るコードが同一のバイナリから来る / `xcodegen generate --spec xcodegen.yml && xcodebuild test -scheme Snapspool -destination 'platform=macOS' -derivedDataPath build/DerivedData -quiet` が成功する / entitlementsの埋め込みと `LSUIElement` は維持される。（**Why**: 現在 `Snapspool`(application) と `SnapspoolTestable`(library.static) が両方 `Sources/` を自前でコンパイルしており、テストはライブラリ側の複製を検証している。ビルド設定が片方だけ変わるとテストが通るのに製品が壊れる状態になり得る）
+- [x] アプリ本体とテスト用ライブラリで同じソースを二重にコンパイルしない構成にする。対象 `xcodegen.yml`。満たすこと: `Sources/` 配下の共通コードがビルド全体で1回だけコンパイルされる / アプリターゲットはそのコードをライブラリとしてリンクし、同じソースを再コンパイルしない / テストが検証するコードと、アプリに実際に入るコードが同一のバイナリから来る / `xcodegen generate --spec xcodegen.yml && xcodebuild test -scheme Snapspool -destination 'platform=macOS' -derivedDataPath build/DerivedData -quiet` が成功する / entitlementsの埋め込みと `LSUIElement` は維持される。（**Why**: 現在 `Snapspool`(application) と `SnapspoolTestable`(library.static) が両方 `Sources/` を自前でコンパイルしており、テストはライブラリ側の複製を検証している。ビルド設定が片方だけ変わるとテストが通るのに製品が壊れる状態になり得る）
 
 ## Phase 6: グローバルショートカット
 
