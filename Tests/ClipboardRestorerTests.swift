@@ -36,6 +36,24 @@ final class ClipboardRestorerTests: XCTestCase {
     }
 
     @MainActor
+    func testSystemPasteboardWriterBuildsNativeItemWithTextAndMarker() throws {
+        let textData = Data("production adapter".utf8)
+        let item = SystemClipboardPasteboardWriter.makeItem(with: [
+            PasteboardRepresentation(
+                type: ClipboardContentSelector.plainTextType,
+                data: textData
+            ),
+            PasteboardRepresentation(
+                type: ClipboardContentSelector.restoredType,
+                data: Data()
+            ),
+        ])
+
+        XCTAssertEqual(item.data(forType: ClipboardContentSelector.plainTextType), textData)
+        XCTAssertEqual(item.data(forType: ClipboardContentSelector.restoredType), Data())
+    }
+
+    @MainActor
     func testRestoresImageAsExactSavedPNGAndValidTIFFWithSamePixelsAndColorSpace() throws {
         let pngData = try makePNGData()
         let fileURL = temporaryDirectory.appendingPathComponent("saved.png")
@@ -103,6 +121,39 @@ final class ClipboardRestorerTests: XCTestCase {
         }
     }
 
+    @MainActor
+    func testMissingSavedImageThrowsWithoutChangingPasteboard() throws {
+        let missingURL = temporaryDirectory.appendingPathComponent("missing.png")
+        let entry = HistoryEntry(
+            content: .image(ImageHistoryEntry(fileURL: missingURL, isFallback: false)),
+            detectionOrder: 0
+        )
+        let pasteboard = FakeWritablePasteboard()
+
+        XCTAssertThrowsError(try ClipboardRestorer(pasteboard: pasteboard).restore(entry))
+        XCTAssertEqual(pasteboard.replaceCallCount, 0)
+        XCTAssertTrue(pasteboard.dataByType.isEmpty)
+    }
+
+    @MainActor
+    func testCorruptSavedImageThrowsWithoutChangingPasteboard() throws {
+        let corruptURL = temporaryDirectory.appendingPathComponent("corrupt.png")
+        try Data("not an image".utf8).write(to: corruptURL)
+        let entry = HistoryEntry(
+            content: .image(ImageHistoryEntry(fileURL: corruptURL, isFallback: false)),
+            detectionOrder: 0
+        )
+        let pasteboard = FakeWritablePasteboard()
+
+        XCTAssertThrowsError(try ClipboardRestorer(pasteboard: pasteboard).restore(entry)) { error in
+            guard case ClipboardRestorationError.invalidSavedImage = error else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+        }
+        XCTAssertEqual(pasteboard.replaceCallCount, 0)
+        XCTAssertTrue(pasteboard.dataByType.isEmpty)
+    }
+
     private func makePNGData() throws -> Data {
         let bitmap = try XCTUnwrap(NSBitmapImageRep(
             bitmapDataPlanes: nil,
@@ -135,6 +186,7 @@ private final class FakeWritablePasteboard: ClipboardPasteboardWriting, Clipboar
     private let writeSucceeds: Bool
     private(set) var dataByType: [NSPasteboard.PasteboardType: Data] = [:]
     private(set) var changeCount = 0
+    private(set) var replaceCallCount = 0
 
     var items: [any PasteboardItemReading] {
         dataByType.isEmpty ? [] : [DictionaryPasteboardItem(dataByType: dataByType)]
@@ -145,6 +197,7 @@ private final class FakeWritablePasteboard: ClipboardPasteboardWriting, Clipboar
     }
 
     func replaceContents(with representations: [PasteboardRepresentation]) -> Bool {
+        replaceCallCount += 1
         dataByType = Dictionary(uniqueKeysWithValues: representations.map { ($0.type, $0.data) })
         changeCount += 1
         return writeSucceeds

@@ -21,13 +21,18 @@ struct SystemClipboardPasteboardWriter: ClipboardPasteboardWriting {
     }
 
     func replaceContents(with representations: [PasteboardRepresentation]) -> Bool {
+        let item = Self.makeItem(with: representations)
+
+        pasteboard.clearContents()
+        return pasteboard.writeObjects([item])
+    }
+
+    static func makeItem(with representations: [PasteboardRepresentation]) -> NSPasteboardItem {
         let item = NSPasteboardItem()
         for representation in representations {
             item.setData(representation.data, forType: representation.type)
         }
-
-        pasteboard.clearContents()
-        return pasteboard.writeObjects([item])
+        return item
     }
 }
 
