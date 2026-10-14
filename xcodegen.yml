@@ -20,11 +20,24 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.snapspool.Snapspool
         PRODUCT_NAME: Snapspool
+        PRODUCT_MODULE_NAME: SnapspoolApp
         INFOPLIST_FILE: Info.plist
         GENERATE_INFOPLIST_FILE: NO
         CODE_SIGN_ENTITLEMENTS: Snapspool.entitlements
         ENABLE_APP_SANDBOX: YES
         COMBINE_HIDPI_IMAGES: YES
+
+  SnapspoolTestable:
+    type: library.static
+    platform: macOS
+    sources:
+      - path: Sources
+        excludes:
+          - SnapspoolApp.swift
+    settings:
+      base:
+        PRODUCT_NAME: SnapspoolTestable
+        PRODUCT_MODULE_NAME: Snapspool
 
   SnapspoolTests:
     type: bundle.unit-test
@@ -32,7 +45,7 @@ targets:
     sources:
       - path: Tests
     dependencies:
-      - target: Snapspool
+      - target: SnapspoolTestable
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.snapspool.SnapspoolTests
