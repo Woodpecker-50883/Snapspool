@@ -36,6 +36,27 @@ final class ImageIngestionServiceTests: XCTestCase {
         )
     }
 
+    func testCreatingServiceRemovesFallbackFilesOrphanedByPreviousLaunch() throws {
+        let destination = try directoryURL(named: "destination", blocked: false)
+        let fallback = try directoryURL(named: "fallback", blocked: false)
+        try FileManager.default.createDirectory(
+            at: fallback,
+            withIntermediateDirectories: true
+        )
+        let orphanedFile = fallback.appendingPathComponent("orphaned.png")
+        try Data("previous launch".utf8).write(to: orphanedFile)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: orphanedFile.path))
+
+        _ = ImageIngestionService(
+            destinationSaver: ImageFolderSaver(destinationDirectory: destination),
+            fallbackSaver: ImageFolderSaver(destinationDirectory: fallback),
+            notifier: NotificationSpy()
+        )
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: orphanedFile.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fallback.path))
+    }
+
     func testDestinationFailureStoresRestorableFallbackAndNotifies() async throws {
         let notifier = NotificationSpy()
         let service = try makeService(

@@ -108,6 +108,10 @@ actor ImageIngestionService {
         self.fallbackSaver = fallbackSaver
         self.notifier = notifier
         self.fileManager = fileManager
+        Self.removeOrphanedFallbackFiles(
+            in: fallbackSaver.destinationURL,
+            fileManager: fileManager
+        )
     }
 
     init(
@@ -122,6 +126,10 @@ actor ImageIngestionService {
         self.fallbackSaver = fallbackSaver
         self.notifier = notifier
         self.fileManager = fileManager
+        Self.removeOrphanedFallbackFiles(
+            in: fallbackSaver.destinationURL,
+            fileManager: fileManager
+        )
     }
 
     static func defaultFallbackDirectory(
@@ -135,6 +143,22 @@ actor ImageIngestionService {
         return applicationSupport
             .appendingPathComponent("Snapspool", isDirectory: true)
             .appendingPathComponent("fallback", isDirectory: true)
+    }
+
+    /// History is intentionally memory-only, so every fallback file left from a
+    /// previous process is orphaned when a new service is created.
+    private static func removeOrphanedFallbackFiles(
+        in directory: URL,
+        fileManager: FileManager
+    ) {
+        guard let contents = try? fileManager.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: nil
+        ) else { return }
+
+        for item in contents {
+            try? fileManager.removeItem(at: item)
+        }
     }
 
     @discardableResult
