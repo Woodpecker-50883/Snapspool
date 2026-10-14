@@ -190,6 +190,84 @@ final class ClipboardMonitorTests: XCTestCase {
         XCTAssertNil(ClipboardContentSelector.select(from: [item]))
     }
 
+    func testRejectsFileAndFolderItemsEvenWhenTheyAlsoContainSupportedContent() {
+        let supportedRepresentations: [[NSPasteboard.PasteboardType: Data]] = [
+            [ClipboardContentSelector.plainTextType: Data("/Users/example/copied-file".utf8)],
+            [ClipboardContentSelector.pngType: Data([1, 2, 3])],
+        ]
+
+        for fileType in [
+            ClipboardContentSelector.fileURLType,
+            ClipboardContentSelector.legacyFilenamesType,
+        ] {
+            for supportedRepresentation in supportedRepresentations {
+                var representations = supportedRepresentation
+                representations[fileType] = Data("file:///Users/example/copied-file".utf8)
+
+                XCTAssertNil(
+                    ClipboardContentSelector.select(from: [
+                        FakePasteboardItem(dataByType: representations),
+                    ]),
+                    "Expected items containing \(fileType.rawValue) to be excluded"
+                )
+            }
+        }
+    }
+
+    func testFileCopyDoesNotReachHistoryOrCreateAFile() throws {
+        let destination = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: destination) }
+
+        let pasteboard = FakePasteboard(changeCount: 1, items: [])
+        var history: [ClipboardContent] = []
+        let saver = ImageFolderSaver(destinationDirectory: destination)
+        let monitor = ClipboardMonitor(pasteboard: pasteboard) { content in
+            history.append(content)
+            _ = try? saver.save(content)
+        }
+
+        pasteboard.items = [FakePasteboardItem(dataByType: [
+            ClipboardContentSelector.fileURLType: Data("file:///tmp/copied.png".utf8),
+            ClipboardContentSelector.pngType: Data([1, 2, 3]),
+            ClipboardContentSelector.plainTextType: Data("/tmp/copied.png".utf8),
+        ])]
+        pasteboard.changeCount = 2
+        monitor.poll()
+
+        XCTAssertTrue(history.isEmpty)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: destination.path))
+    }
+
+    func testMonitoringLeavesLatestAppKitPasteboardFileCopyUnchanged() throws {
+        let pasteboard = FakePasteboard(changeCount: 1, items: [])
+        var detected: [ClipboardContent] = []
+        let monitor = ClipboardMonitor(pasteboard: pasteboard) { detected.append($0) }
+
+        let latestItem = NSPasteboardItem()
+        let fileURLData = Data("file:///tmp/latest-copy".utf8)
+        let textData = Data("/tmp/latest-copy".utf8)
+        XCTAssertTrue(latestItem.setData(
+            fileURLData,
+            forType: ClipboardContentSelector.fileURLType
+        ))
+        XCTAssertTrue(latestItem.setData(
+            textData,
+            forType: ClipboardContentSelector.plainTextType
+        ))
+        pasteboard.items = [latestItem]
+        pasteboard.changeCount = 2
+
+        monitor.poll()
+
+        XCTAssertTrue(detected.isEmpty)
+        XCTAssertEqual(pasteboard.changeCount, 2)
+        XCTAssertIdentical(pasteboard.items.first as AnyObject, latestItem)
+        XCTAssertTrue(latestItem.types.contains(ClipboardContentSelector.fileURLType))
+        XCTAssertEqual(latestItem.data(forType: ClipboardContentSelector.fileURLType), fileURLData)
+        XCTAssertEqual(latestItem.data(forType: ClipboardContentSelector.plainTextType), textData)
+    }
+
     private func item(text: String) -> FakePasteboardItem {
         FakePasteboardItem(dataByType: [
             ClipboardContentSelector.plainTextType: Data(text.utf8),
