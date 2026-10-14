@@ -36,6 +36,24 @@ final class ClipboardMonitorTests: XCTestCase {
         XCTAssertTrue(detected.isEmpty)
     }
 
+    func testChangeDuringReadIsDetectedOnNextPollWithMatchingContent() {
+        let pasteboard = FakePasteboard(changeCount: 10, items: [item(text: "initial")])
+        var detected: [ClipboardContent] = []
+        let monitor = ClipboardMonitor(pasteboard: pasteboard) { detected.append($0) }
+
+        pasteboard.changeCount = 11
+        pasteboard.items = [CallbackPasteboardItem(text: "superseded during read") {
+            pasteboard.changeCount = 12
+            pasteboard.items = [self.item(text: "latest")]
+        }]
+
+        monitor.poll()
+        XCTAssertTrue(detected.isEmpty)
+
+        monitor.poll()
+        XCTAssertEqual(detected, [.text(data: Data("latest".utf8))])
+    }
+
     func testPauseSuppressesDetectionAndResumeDiscardsChangesMadeWhilePaused() {
         let pasteboard = FakePasteboard(changeCount: 10, items: [item(text: "initial")])
         var detected: [ClipboardContent] = []
@@ -193,6 +211,25 @@ private final class FakePasteboard: ClipboardPasteboardReading {
     init(changeCount: Int, items: [any PasteboardItemReading]) {
         self.changeCount = changeCount
         self.items = items
+    }
+}
+
+private final class CallbackPasteboardItem: PasteboardItemReading {
+    let types = [ClipboardContentSelector.plainTextType]
+    private let data: Data
+    private var onDataRead: (() -> Void)?
+
+    init(text: String, onDataRead: @escaping () -> Void) {
+        data = Data(text.utf8)
+        self.onDataRead = onDataRead
+    }
+
+    func data(forType type: NSPasteboard.PasteboardType) -> Data? {
+        guard type == ClipboardContentSelector.plainTextType else { return nil }
+        let callback = onDataRead
+        onDataRead = nil
+        callback?()
+        return data
     }
 }
 

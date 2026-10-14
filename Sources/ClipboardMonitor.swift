@@ -146,11 +146,19 @@ final class ClipboardMonitor: NSObject {
 
     func poll() {
         guard !isPaused else { return }
-        let currentChangeCount = pasteboard.changeCount
-        guard currentChangeCount > lastChangeCount else { return }
-        lastChangeCount = currentChangeCount
+        let changeCountBeforeRead = pasteboard.changeCount
+        guard changeCountBeforeRead > lastChangeCount else { return }
 
-        guard let content = ClipboardContentSelector.select(from: pasteboard.items) else { return }
+        let content = ClipboardContentSelector.select(from: pasteboard.items)
+
+        // Reading an NSPasteboard item is not an atomic operation. If another
+        // process changes the pasteboard while its representations are being
+        // read, do not associate that data with either change count. Keeping
+        // the old baseline makes the newer state eligible on the next poll.
+        guard pasteboard.changeCount == changeCountBeforeRead else { return }
+        lastChangeCount = changeCountBeforeRead
+
+        guard let content else { return }
         didDetectContent(content)
     }
 
