@@ -9,6 +9,7 @@ public final class SnapspoolRuntime {
     private let menuActions: MenuBarActions
     private let historyStore: HistoryStore
     private let historyPickerController: HistoryPickerController
+    private let globalHotKeyController: GlobalHotKeyController
 
     public init() {
         let historyStore = HistoryStore()
@@ -20,14 +21,21 @@ public final class SnapspoolRuntime {
         self.historyStore = historyStore
         self.clipboardMonitor = clipboardMonitor
         historyPickerController = pickerController
+        globalHotKeyController = GlobalHotKeyController(
+            showHistoryPicker: { pickerController.show() }
+        )
         menuActions = MenuBarActions(
             clipboardMonitor: clipboardMonitor,
-            showHistoryPicker: { pickerController.show() }
+            showHistoryPicker: { pickerController.show() },
+            hasHotKeyRegistrationWarning: { [globalHotKeyController] in
+                globalHotKeyController.hasRegistrationWarning
+            }
         )
     }
 
     public func start() {
         clipboardMonitor.start()
+        globalHotKeyController.start()
     }
 
     public func makeMenu() -> NSMenu {
@@ -40,14 +48,17 @@ final class MenuBarActions: NSObject {
     private let clipboardMonitor: ClipboardMonitor
     private let showHistoryPicker: () -> Void
     private let terminateApplication: () -> Void
+    private let hasHotKeyRegistrationWarning: () -> Bool
 
     init(
         clipboardMonitor: ClipboardMonitor = ClipboardMonitor { _ in },
         showHistoryPicker: @escaping () -> Void = {},
+        hasHotKeyRegistrationWarning: @escaping () -> Bool = { false },
         terminateApplication: @escaping () -> Void = { NSApplication.shared.terminate(nil) }
     ) {
         self.clipboardMonitor = clipboardMonitor
         self.showHistoryPicker = showHistoryPicker
+        self.hasHotKeyRegistrationWarning = hasHotKeyRegistrationWarning
         self.terminateApplication = terminateApplication
     }
 
@@ -62,6 +73,15 @@ final class MenuBarActions: NSObject {
     func makeMenu() -> NSMenu {
         let menu = NSMenu()
         menu.addItem(makeItem(title: "履歴", action: #selector(openHistory(_:))))
+        if hasHotKeyRegistrationWarning() {
+            let warning = NSMenuItem(
+                title: "⚠︎ ショートカットを登録できません",
+                action: nil,
+                keyEquivalent: ""
+            )
+            warning.isEnabled = false
+            menu.addItem(warning)
+        }
         menu.addItem(makeItem(title: monitoringMenuTitle, action: #selector(pauseMonitoring(_:))))
         menu.addItem(makeItem(title: "設定", action: #selector(openSettings(_:))))
         menu.addItem(.separator())

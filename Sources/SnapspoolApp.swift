@@ -37,6 +37,7 @@ private struct MenuBarContent: View {
                     guard let action = item.action else { return }
                     NSApplication.shared.sendAction(action, to: item.target, from: item)
                 }
+                .disabled(!item.isEnabled)
             }
         }
     }

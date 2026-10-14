@@ -29,6 +29,25 @@ final class MenuBarActionsTests: XCTestCase {
         XCTAssertEqual(historyOpenCount, 1)
     }
 
+    func testRegistrationWarningIsShownWithoutDisablingHistoryMenu() throws {
+        var historyOpenCount = 0
+        let actions = MenuBarActions(
+            clipboardMonitor: ClipboardMonitor(pasteboard: FakeMenuPasteboard()) { _ in },
+            showHistoryPicker: { historyOpenCount += 1 },
+            hasHotKeyRegistrationWarning: { true }
+        )
+
+        let menu = actions.makeMenu()
+
+        XCTAssertEqual(
+            menu.items.map(\.title),
+            ["履歴", "⚠︎ ショートカットを登録できません", "監視の一時停止", "設定", "", "終了"]
+        )
+        XCTAssertFalse(try XCTUnwrap(menu.item(at: 1)).isEnabled)
+        activate(try XCTUnwrap(menu.item(at: 0)))
+        XCTAssertEqual(historyOpenCount, 1)
+    }
+
     func testBuiltMenuPauseActionTogglesMonitorAndUpdatesVisibleTitle() throws {
         let monitor = ClipboardMonitor(pasteboard: FakeMenuPasteboard()) { _ in }
         let actions = MenuBarActions(clipboardMonitor: monitor)
