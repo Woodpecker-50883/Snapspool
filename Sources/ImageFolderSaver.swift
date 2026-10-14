@@ -13,6 +13,8 @@ struct ImageFolderSaver: @unchecked Sendable {
     private let namingTimeZone: TimeZone
     private let willSave: @Sendable () -> Void
 
+    var destinationURL: URL { destinationDirectory }
+
     init(
         destinationDirectory: URL = Self.defaultDestinationDirectory(),
         fileManager: FileManager = .default,

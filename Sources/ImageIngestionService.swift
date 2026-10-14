@@ -53,11 +53,22 @@ struct ImageHistoryEntry: Identifiable, Equatable, Sendable {
     let id: UUID
     let fileURL: URL
     let isFallback: Bool
+    let accessLease: SecurityScopedAccessLease?
 
-    init(id: UUID = UUID(), fileURL: URL, isFallback: Bool) {
+    init(
+        id: UUID = UUID(),
+        fileURL: URL,
+        isFallback: Bool,
+        accessLease: SecurityScopedAccessLease? = nil
+    ) {
         self.id = id
         self.fileURL = fileURL
         self.isFallback = isFallback
+        self.accessLease = accessLease
+    }
+
+    static func == (lhs: ImageHistoryEntry, rhs: ImageHistoryEntry) -> Bool {
+        lhs.id == rhs.id && lhs.fileURL == rhs.fileURL && lhs.isFallback == rhs.isFallback
     }
 
     /// Reads the exact PNG kept for this history entry, ready for pasteboard restoration.
@@ -67,7 +78,7 @@ struct ImageHistoryEntry: Identifiable, Equatable, Sendable {
 }
 
 actor ImageIngestionService {
-    private let destinationSaver: @Sendable () -> ImageFolderSaver
+    private let destination: @Sendable () -> ImageDestinationSnapshot
     private let fallbackSaver: ImageFolderSaver
     private let notifier: any ImageSaveNotifying
     private let fileManager: FileManager
@@ -82,21 +93,23 @@ actor ImageIngestionService {
         notifier: any ImageSaveNotifying = UserNotificationImageSaveNotifier(),
         fileManager: FileManager = .default
     ) {
-        self.destinationSaver = { destinationSaver }
+        self.destination = {
+            ImageDestinationSnapshot(saver: destinationSaver, accessLease: nil)
+        }
         self.fallbackSaver = fallbackSaver
         self.notifier = notifier
         self.fileManager = fileManager
     }
 
     init(
-        destinationSaverProvider: @escaping @Sendable () -> ImageFolderSaver,
+        destinationProvider: @escaping @Sendable () -> ImageDestinationSnapshot,
         fallbackSaver: ImageFolderSaver = ImageFolderSaver(
             destinationDirectory: ImageIngestionService.defaultFallbackDirectory()
         ),
         notifier: any ImageSaveNotifying = UserNotificationImageSaveNotifier(),
         fileManager: FileManager = .default
     ) {
-        self.destinationSaver = destinationSaverProvider
+        self.destination = destinationProvider
         self.fallbackSaver = fallbackSaver
         self.notifier = notifier
         self.fileManager = fileManager
@@ -119,12 +132,24 @@ actor ImageIngestionService {
     func ingest(_ content: ClipboardContent) -> ImageHistoryEntry? {
         guard case .image = content else { return nil }
 
+        let destination = destination()
+        // This temporary history reference also keeps the security scope open
+        // if the user changes destinations while encoding or writing is active.
+        destination.accessLease?.retainForHistory()
         do {
-            guard let fileURL = try destinationSaver().save(content) else { return nil }
-            let entry = ImageHistoryEntry(fileURL: fileURL, isFallback: false)
+            guard let fileURL = try destination.makeSaver().save(content) else {
+                destination.accessLease?.releaseFromHistory()
+                return nil
+            }
+            let entry = ImageHistoryEntry(
+                fileURL: fileURL,
+                isFallback: false,
+                accessLease: destination.accessLease
+            )
             entries.insert(entry, at: 0)
             return entry
         } catch {
+            destination.accessLease?.releaseFromHistory()
             do {
                 guard let fileURL = try fallbackSaver.save(content) else { return nil }
                 let entry = ImageHistoryEntry(fileURL: fileURL, isFallback: true)
@@ -143,6 +168,8 @@ actor ImageIngestionService {
         let removed = entries.remove(at: index)
         if removed.isFallback {
             try? fileManager.removeItem(at: removed.fileURL)
+        } else {
+            removed.accessLease?.releaseFromHistory()
         }
     }
 }

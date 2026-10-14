@@ -4,24 +4,134 @@ import Combine
 import Foundation
 import SwiftUI
 
+struct ResolvedSecurityScopedBookmark {
+    let url: URL
+    let isStale: Bool
+}
+
+protocol SecurityScopedResourceAccess: AnyObject {
+    func makeBookmark(for url: URL) throws -> Data
+    func resolveBookmark(_ data: Data) throws -> ResolvedSecurityScopedBookmark
+    func startAccessing(_ url: URL) -> Bool
+    func stopAccessing(_ url: URL)
+}
+
+final class SystemSecurityScopedResourceAccess: SecurityScopedResourceAccess {
+    func makeBookmark(for url: URL) throws -> Data {
+        try url.bookmarkData(
+            options: .withSecurityScope,
+            includingResourceValuesForKeys: nil,
+            relativeTo: nil
+        )
+    }
+
+    func resolveBookmark(_ data: Data) throws -> ResolvedSecurityScopedBookmark {
+        var isStale = false
+        let url = try URL(
+            resolvingBookmarkData: data,
+            options: .withSecurityScope,
+            relativeTo: nil,
+            bookmarkDataIsStale: &isStale
+        )
+        return ResolvedSecurityScopedBookmark(url: url, isStale: isStale)
+    }
+
+    func startAccessing(_ url: URL) -> Bool {
+        url.startAccessingSecurityScopedResource()
+    }
+
+    func stopAccessing(_ url: URL) {
+        url.stopAccessingSecurityScopedResource()
+    }
+}
+
+final class SecurityScopedAccessLease: @unchecked Sendable {
+    let url: URL
+
+    private let access: any SecurityScopedResourceAccess
+    private let lock = NSLock()
+    private var destinationOwned = true
+    private var historyReferenceCount = 0
+    private var isAccessing: Bool
+
+    init(url: URL, access: any SecurityScopedResourceAccess) {
+        self.url = url
+        self.access = access
+        isAccessing = access.startAccessing(url)
+    }
+
+    func retainForHistory() {
+        lock.withLock { historyReferenceCount += 1 }
+    }
+
+    func releaseFromHistory() {
+        lock.withLock {
+            precondition(historyReferenceCount > 0)
+            historyReferenceCount -= 1
+            stopIfUnused()
+        }
+    }
+
+    func releaseDestinationOwnership() {
+        lock.withLock {
+            guard destinationOwned else { return }
+            destinationOwned = false
+            stopIfUnused()
+        }
+    }
+
+    private func stopIfUnused() {
+        guard !destinationOwned, historyReferenceCount == 0, isAccessing else { return }
+        isAccessing = false
+        access.stopAccessing(url)
+    }
+
+    deinit {
+        if isAccessing {
+            access.stopAccessing(url)
+        }
+    }
+}
+
+struct ImageDestinationSnapshot: @unchecked Sendable {
+    private let saver: ImageFolderSaver
+    let accessLease: SecurityScopedAccessLease?
+
+    init(url: URL, accessLease: SecurityScopedAccessLease?) {
+        saver = ImageFolderSaver(destinationDirectory: url)
+        self.accessLease = accessLease
+    }
+
+    init(saver: ImageFolderSaver, accessLease: SecurityScopedAccessLease?) {
+        self.saver = saver
+        self.accessLease = accessLease
+    }
+
+    var url: URL { saver.destinationURL }
+
+    func makeSaver() -> ImageFolderSaver {
+        saver
+    }
+}
+
 final class MutableImageDestination: @unchecked Sendable {
     private let lock = NSLock()
-    private var storedURL: URL
+    private var storedSnapshot: ImageDestinationSnapshot
 
-    init(url: URL) {
-        storedURL = url
+    init(url: URL, accessLease: SecurityScopedAccessLease? = nil) {
+        storedSnapshot = ImageDestinationSnapshot(url: url, accessLease: accessLease)
     }
 
     var url: URL {
-        lock.withLock { storedURL }
+        lock.withLock { storedSnapshot.url }
     }
 
-    func update(to url: URL) {
-        lock.withLock { storedURL = url }
+    func update(to snapshot: ImageDestinationSnapshot) {
+        lock.withLock { storedSnapshot = snapshot }
     }
 
-    func makeSaver() -> ImageFolderSaver {
-        ImageFolderSaver(destinationDirectory: url)
+    func snapshot() -> ImageDestinationSnapshot {
+        lock.withLock { storedSnapshot }
     }
 }
 
@@ -29,6 +139,7 @@ final class MutableImageDestination: @unchecked Sendable {
 public final class AppSettings: ObservableObject {
     private enum Key {
         static let destinationPath = "settings.destinationPath"
+        static let destinationBookmark = "settings.destinationBookmark"
         static let imageLimit = "settings.imageLimit"
         static let textLimit = "settings.textLimit"
         static let shortcutKeyCode = "settings.shortcut.keyCode"
@@ -42,16 +153,40 @@ public final class AppSettings: ObservableObject {
     @Published public var shortcutErrorMessage: String?
 
     private let defaults: UserDefaults
+    private let resourceAccess: any SecurityScopedResourceAccess
     private var historyStore: HistoryStore?
     private var hotKeyController: GlobalHotKeyController?
     private var imageDestination: MutableImageDestination?
+    private var destinationAccessLease: SecurityScopedAccessLease?
 
-    init(defaults: UserDefaults = .standard) {
+    init(
+        defaults: UserDefaults = .standard,
+        resourceAccess: any SecurityScopedResourceAccess = SystemSecurityScopedResourceAccess()
+    ) {
         self.defaults = defaults
-        if let path = defaults.string(forKey: Key.destinationPath), !path.isEmpty {
+        self.resourceAccess = resourceAccess
+        destinationAccessLease = nil
+
+        if let bookmark = defaults.data(forKey: Key.destinationBookmark),
+           let resolved = try? resourceAccess.resolveBookmark(bookmark) {
+            destinationURL = resolved.url
+            destinationAccessLease = SecurityScopedAccessLease(
+                url: resolved.url,
+                access: resourceAccess
+            )
+            if resolved.isStale,
+               let refreshed = try? resourceAccess.makeBookmark(for: resolved.url) {
+                defaults.set(refreshed, forKey: Key.destinationBookmark)
+            }
+        } else if let path = defaults.string(forKey: Key.destinationPath),
+                  !path.isEmpty,
+                  Self.isInsidePictures(URL(fileURLWithPath: path, isDirectory: true)) {
             destinationURL = URL(fileURLWithPath: path, isDirectory: true)
+            defaults.removeObject(forKey: Key.destinationBookmark)
         } else {
             destinationURL = ImageFolderSaver.defaultDestinationDirectory()
+            defaults.removeObject(forKey: Key.destinationPath)
+            defaults.removeObject(forKey: Key.destinationBookmark)
         }
         let storedImageLimit = defaults.object(forKey: Key.imageLimit) as? Int
             ?? HistoryStore.defaultImageLimit
@@ -79,6 +214,10 @@ public final class AppSettings: ObservableObject {
         self.historyStore = historyStore
         self.hotKeyController = hotKeyController
         self.imageDestination = imageDestination
+        imageDestination.update(to: ImageDestinationSnapshot(
+            url: destinationURL,
+            accessLease: destinationAccessLease
+        ))
     }
 
     public func setImageLimit(_ value: Int) {
@@ -95,10 +234,46 @@ public final class AppSettings: ObservableObject {
         historyStore?.setTextLimit(value)
     }
 
-    public func setDestinationURL(_ url: URL) {
-        destinationURL = url
-        defaults.set(url.path, forKey: Key.destinationPath)
-        imageDestination?.update(to: url)
+    @discardableResult
+    public func setDestinationURL(_ url: URL) -> Bool {
+        let standardizedURL = url.standardizedFileURL
+        let bookmark: Data?
+        let newLease: SecurityScopedAccessLease?
+
+        if Self.isInsidePictures(standardizedURL) {
+            bookmark = nil
+            newLease = nil
+        } else {
+            guard let createdBookmark = try? resourceAccess.makeBookmark(for: standardizedURL) else {
+                return false
+            }
+            bookmark = createdBookmark
+            newLease = SecurityScopedAccessLease(url: standardizedURL, access: resourceAccess)
+        }
+
+        let oldLease = destinationAccessLease
+        destinationAccessLease = newLease
+        destinationURL = standardizedURL
+        defaults.set(standardizedURL.path, forKey: Key.destinationPath)
+        if let bookmark {
+            defaults.set(bookmark, forKey: Key.destinationBookmark)
+        } else {
+            defaults.removeObject(forKey: Key.destinationBookmark)
+        }
+        imageDestination?.update(to: ImageDestinationSnapshot(
+            url: standardizedURL,
+            accessLease: newLease
+        ))
+        oldLease?.releaseDestinationOwnership()
+        return true
+    }
+
+    /// A nil URL represents a cancelled open panel and deliberately leaves all
+    /// current destination state untouched.
+    @discardableResult
+    func applyDestinationSelection(_ url: URL?) -> Bool {
+        guard let url else { return false }
+        return setDestinationURL(url)
     }
 
     @discardableResult
@@ -118,6 +293,19 @@ public final class AppSettings: ObservableObject {
     private static func clampedLimit(_ value: Int) -> Int {
         min(max(value, HistoryStore.allowedLimitRange.lowerBound),
             HistoryStore.allowedLimitRange.upperBound)
+    }
+
+    private static func isInsidePictures(_ url: URL) -> Bool {
+        let pictures = ImageFolderSaver.defaultDestinationDirectory()
+            .deletingLastPathComponent()
+            .standardizedFileURL.pathComponents
+        let candidate = url.standardizedFileURL.pathComponents
+        return candidate.count >= pictures.count
+            && Array(candidate.prefix(pictures.count)) == pictures
+    }
+
+    deinit {
+        destinationAccessLease?.releaseDestinationOwnership()
     }
 }
 
@@ -244,7 +432,7 @@ public struct AppSettingsView: View {
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false
         panel.directoryURL = settings.destinationURL
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        settings.setDestinationURL(url)
+        guard panel.runModal() == .OK else { return }
+        _ = settings.applyDestinationSelection(panel.url)
     }
 }

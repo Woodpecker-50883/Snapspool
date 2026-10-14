@@ -16,7 +16,7 @@ public final class SnapspoolRuntime {
         let settings = AppSettings()
         let imageDestination = MutableImageDestination(url: settings.destinationURL)
         let imageService = ImageIngestionService(
-            destinationSaverProvider: { imageDestination.makeSaver() }
+            destinationProvider: { imageDestination.snapshot() }
         )
         let historyStore = HistoryStore(
             imageLimit: settings.imageLimit,
