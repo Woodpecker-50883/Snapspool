@@ -4,8 +4,24 @@ import XCTest
 
 @MainActor
 final class ClipboardMonitorTests: XCTestCase {
-    func testPollingIntervalIsPointThreeSeconds() {
-        XCTAssertEqual(ClipboardMonitor.pollingInterval, 0.3)
+    func testPollsAtApproximatelyPointThreeSecondIntervals() {
+        let pasteboard = PollTrackingPasteboard()
+        let monitor = ClipboardMonitor(pasteboard: pasteboard) { _ in }
+        let start = Date()
+        monitor.start()
+        defer { monitor.stop() }
+
+        XCTAssertTrue(
+            runMainRunLoop(until: { pasteboard.changeCountReadDates.count >= 3 }, timeout: 1.0),
+            "Expected two timer-driven pasteboard polls"
+        )
+
+        let timerPolls = Array(pasteboard.changeCountReadDates.dropFirst().prefix(2))
+        XCTAssertEqual(timerPolls.count, 2)
+        XCTAssertGreaterThanOrEqual(timerPolls[0].timeIntervalSince(start), 0.20)
+        XCTAssertLessThan(timerPolls[0].timeIntervalSince(start), 0.65)
+        XCTAssertGreaterThanOrEqual(timerPolls[1].timeIntervalSince(timerPolls[0]), 0.20)
+        XCTAssertLessThan(timerPolls[1].timeIntervalSince(timerPolls[0]), 0.65)
     }
 
     func testOnlyProcessesWhenChangeCountIncreases() {
@@ -73,6 +89,34 @@ final class ClipboardMonitorTests: XCTestCase {
         pasteboard.items = [item(text: "after resume")]
         monitor.poll()
         XCTAssertEqual(detected, [.text(data: Data("after resume".utf8))])
+    }
+
+    func testPauseStopsTimerPollingAndResumeRestartsIt() {
+        let pasteboard = PollTrackingPasteboard()
+        let monitor = ClipboardMonitor(pasteboard: pasteboard) { _ in }
+        monitor.start()
+        defer { monitor.stop() }
+
+        XCTAssertTrue(
+            runMainRunLoop(until: { pasteboard.changeCountReadDates.count >= 2 }, timeout: 0.8),
+            "Expected polling to begin after start()"
+        )
+
+        monitor.pause()
+        let readCountAtPause = pasteboard.changeCountReadDates.count
+        runMainRunLoop(for: 0.45)
+        XCTAssertEqual(pasteboard.changeCountReadDates.count, readCountAtPause)
+
+        monitor.resume()
+        let readCountAfterResumeBaseline = pasteboard.changeCountReadDates.count
+        XCTAssertEqual(readCountAfterResumeBaseline, readCountAtPause + 1)
+        XCTAssertTrue(
+            runMainRunLoop(
+                until: { pasteboard.changeCountReadDates.count > readCountAfterResumeBaseline },
+                timeout: 0.8
+            ),
+            "Expected timer polling to restart after resume()"
+        )
     }
 
     func testPausedStateIsNotPersistedAcrossMonitorInstances() {
@@ -167,18 +211,38 @@ final class ClipboardMonitorTests: XCTestCase {
         }
     }
 
-    func testRejectsTextLargerThanOneMiBButAcceptsExactLimit() {
+    func testRejectsMultibyteTextLargerThanOneMiBButAcceptsExactByteLimit() {
+        let exactLimitData = Data(String(repeating: "é", count: 524_288).utf8)
+        let overLimitData = Data((String(repeating: "é", count: 524_288) + "é").utf8)
+        XCTAssertEqual(exactLimitData.count, 1_048_576)
+        XCTAssertEqual(overLimitData.count, 1_048_578)
+
         let exactLimit = FakePasteboardItem(dataByType: [
-            ClipboardContentSelector.plainTextType:
-                Data(repeating: 0x61, count: ClipboardContentSelector.maximumTextByteCount),
+            ClipboardContentSelector.plainTextType: exactLimitData,
         ])
         let overLimit = FakePasteboardItem(dataByType: [
-            ClipboardContentSelector.plainTextType:
-                Data(repeating: 0x61, count: ClipboardContentSelector.maximumTextByteCount + 1),
+            ClipboardContentSelector.plainTextType: overLimitData,
         ])
 
         XCTAssertNotNil(ClipboardContentSelector.select(from: [exactLimit]))
         XCTAssertNil(ClipboardContentSelector.select(from: [overLimit]))
+    }
+
+    func testProductionNSPasteboardItemAdapterDetectsRealAppKitItem() {
+        let pasteboard = FakePasteboard(changeCount: 1, items: [])
+        var detected: [ClipboardContent] = []
+        let monitor = ClipboardMonitor(pasteboard: pasteboard) { detected.append($0) }
+        let appKitItem = NSPasteboardItem()
+        let expectedData = Data("AppKit pasteboard item".utf8)
+        XCTAssertTrue(
+            appKitItem.setData(expectedData, forType: ClipboardContentSelector.plainTextType)
+        )
+        pasteboard.items = [appKitItem]
+        pasteboard.changeCount = 2
+
+        monitor.poll()
+
+        XCTAssertEqual(detected, [.text(data: expectedData)])
     }
 
     func testRejectsRestoredItems() {
@@ -279,6 +343,21 @@ final class ClipboardMonitorTests: XCTestCase {
         case let .image(data, _), let .text(data): data
         }
     }
+
+    private func runMainRunLoop(
+        until condition: () -> Bool,
+        timeout: TimeInterval
+    ) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while !condition(), Date() < deadline {
+            RunLoop.main.run(until: min(deadline, Date().addingTimeInterval(0.01)))
+        }
+        return condition()
+    }
+
+    private func runMainRunLoop(for duration: TimeInterval) {
+        RunLoop.main.run(until: Date().addingTimeInterval(duration))
+    }
 }
 
 @MainActor
@@ -290,6 +369,18 @@ private final class FakePasteboard: ClipboardPasteboardReading {
         self.changeCount = changeCount
         self.items = items
     }
+}
+
+@MainActor
+private final class PollTrackingPasteboard: ClipboardPasteboardReading {
+    private(set) var changeCountReadDates: [Date] = []
+
+    var changeCount: Int {
+        changeCountReadDates.append(Date())
+        return 0
+    }
+
+    var items: [any PasteboardItemReading] = []
 }
 
 private final class CallbackPasteboardItem: PasteboardItemReading {
