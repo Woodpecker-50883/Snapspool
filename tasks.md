@@ -110,7 +110,7 @@
 - [x] `Tests/AppConfigurationTests.swift` のGit管理対象外テストを、`Snapspool.xcodeproj/project.pbxproj` と `build/DerivedData` だけでなく `Snapspool.xcodeproj/`・`build/` 配下全体について追跡ファイルがないことを検証するよう修正し、各ディレクトリ内の別ファイルが追跡された場合にもテストが失敗するようにする。
 - [x] 監視の一時停止状態をSwiftUIが監視できる状態として保持し、一時停止・再開の操作直後にメニューバー項目の表示が「監視の一時停止」と「監視を再開」の間で確実に更新されるよう修正し、その状態連動をテストで検証する。
 - [x] アプリ終了で履歴が破棄された後に退避ファイルが残り続けないよう、終了時または次回起動時に `Application Support/Snapspool/fallback/` 内の対応する履歴が存在しないファイルを削除し、テストで検証する。
-- [ ] `Tests/ClipboardMonitorTests.swift` の監視間隔テストを、実装を0.4秒など0.3秒以外へ変更した場合に失敗し、かつ実際のタイマー駆動を検証できる許容範囲・測定方法へ修正する。
+- [x] `Tests/ClipboardMonitorTests.swift` の監視間隔テストを、実装を0.4秒など0.3秒以外へ変更した場合に失敗し、かつ実際のタイマー駆動を検証できる許容範囲・測定方法へ修正する。
 
 ## Phase 10: 出荷前の棚卸し
 

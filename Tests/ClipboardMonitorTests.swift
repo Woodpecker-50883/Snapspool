@@ -7,21 +7,25 @@ final class ClipboardMonitorTests: XCTestCase {
     func testPollsAtApproximatelyPointThreeSecondIntervals() {
         let pasteboard = PollTrackingPasteboard()
         let monitor = ClipboardMonitor(pasteboard: pasteboard) { _ in }
-        let start = Date()
+        let start = ProcessInfo.processInfo.systemUptime
         monitor.start()
         defer { monitor.stop() }
 
         XCTAssertTrue(
-            runMainRunLoop(until: { pasteboard.changeCountReadDates.count >= 3 }, timeout: 1.0),
-            "Expected two timer-driven pasteboard polls"
+            runMainRunLoop(until: { pasteboard.changeCountReadTimes.count >= 6 }, timeout: 1.85),
+            "Expected five timer-driven pasteboard polls within the 0.3-second cadence deadline"
         )
 
-        let timerPolls = Array(pasteboard.changeCountReadDates.dropFirst().prefix(2))
-        XCTAssertEqual(timerPolls.count, 2)
-        XCTAssertGreaterThanOrEqual(timerPolls[0].timeIntervalSince(start), 0.20)
-        XCTAssertLessThan(timerPolls[0].timeIntervalSince(start), 0.65)
-        XCTAssertGreaterThanOrEqual(timerPolls[1].timeIntervalSince(timerPolls[0]), 0.20)
-        XCTAssertLessThan(timerPolls[1].timeIntervalSince(timerPolls[0]), 0.65)
+        let timerPolls = Array(pasteboard.changeCountReadTimes.dropFirst().prefix(5))
+        XCTAssertEqual(timerPolls.count, 5)
+        guard timerPolls.count == 5 else { return }
+
+        let firstFireDelay = timerPolls[0] - start
+        let fourIntervalDuration = timerPolls[4] - timerPolls[0]
+        XCTAssertGreaterThanOrEqual(firstFireDelay, 0.24)
+        XCTAssertLessThan(firstFireDelay, 0.39)
+        XCTAssertGreaterThanOrEqual(fourIntervalDuration, 1.04)
+        XCTAssertLessThan(fourIntervalDuration, 1.50)
     }
 
     func testOnlyProcessesWhenChangeCountIncreases() {
@@ -98,21 +102,21 @@ final class ClipboardMonitorTests: XCTestCase {
         defer { monitor.stop() }
 
         XCTAssertTrue(
-            runMainRunLoop(until: { pasteboard.changeCountReadDates.count >= 2 }, timeout: 0.8),
+            runMainRunLoop(until: { pasteboard.changeCountReadTimes.count >= 2 }, timeout: 0.8),
             "Expected polling to begin after start()"
         )
 
         monitor.pause()
-        let readCountAtPause = pasteboard.changeCountReadDates.count
+        let readCountAtPause = pasteboard.changeCountReadTimes.count
         runMainRunLoop(for: 0.45)
-        XCTAssertEqual(pasteboard.changeCountReadDates.count, readCountAtPause)
+        XCTAssertEqual(pasteboard.changeCountReadTimes.count, readCountAtPause)
 
         monitor.resume()
-        let readCountAfterResumeBaseline = pasteboard.changeCountReadDates.count
+        let readCountAfterResumeBaseline = pasteboard.changeCountReadTimes.count
         XCTAssertEqual(readCountAfterResumeBaseline, readCountAtPause + 1)
         XCTAssertTrue(
             runMainRunLoop(
-                until: { pasteboard.changeCountReadDates.count > readCountAfterResumeBaseline },
+                until: { pasteboard.changeCountReadTimes.count > readCountAfterResumeBaseline },
                 timeout: 0.8
             ),
             "Expected timer polling to restart after resume()"
@@ -373,10 +377,10 @@ private final class FakePasteboard: ClipboardPasteboardReading {
 
 @MainActor
 private final class PollTrackingPasteboard: ClipboardPasteboardReading {
-    private(set) var changeCountReadDates: [Date] = []
+    private(set) var changeCountReadTimes: [TimeInterval] = []
 
     var changeCount: Int {
-        changeCountReadDates.append(Date())
+        changeCountReadTimes.append(ProcessInfo.processInfo.systemUptime)
         return 0
     }
 
