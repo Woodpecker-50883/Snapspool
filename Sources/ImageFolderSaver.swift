@@ -10,7 +10,7 @@ struct ImageFolderSaver {
     private let destinationDirectory: URL
     private let fileManager: FileManager
     private let now: () -> Date
-    private let calendar: Calendar
+    private let namingTimeZone: TimeZone
 
     init(
         destinationDirectory: URL = Self.defaultDestinationDirectory(),
@@ -21,7 +21,7 @@ struct ImageFolderSaver {
         self.destinationDirectory = destinationDirectory
         self.fileManager = fileManager
         self.now = now
-        self.calendar = calendar
+        self.namingTimeZone = calendar.timeZone
     }
 
     static func defaultDestinationDirectory(
@@ -59,19 +59,12 @@ struct ImageFolderSaver {
     }
 
     private func nextAvailableFileURL(for date: Date) -> URL {
-        let components = calendar.dateComponents(
-            [.year, .month, .day, .hour, .minute, .second],
-            from: date
-        )
-        let stem = String(
-            format: "%04d%02d%02d-%02d%02d%02d",
-            components.year ?? 0,
-            components.month ?? 0,
-            components.day ?? 0,
-            components.hour ?? 0,
-            components.minute ?? 0,
-            components.second ?? 0
-        )
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.timeZone = namingTimeZone
+        formatter.dateFormat = "yyyyMMdd-HHmmss"
+        let stem = formatter.string(from: date)
 
         var sequence = 1
         while true {

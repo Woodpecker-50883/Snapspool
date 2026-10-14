@@ -87,6 +87,44 @@ final class ImageFolderSaverTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: firstURL), firstData)
     }
 
+    func testTimestampAlwaysUsesGregorianCalendarAndASCIIDigits() throws {
+        let date = Date(timeIntervalSince1970: 1_775_369_228)
+        let environments: [(Calendar.Identifier, String)] = [
+            (.japanese, "ja_JP"),
+            (.buddhist, "th_TH"),
+            (.islamicUmmAlQura, "ar_SA"),
+        ]
+
+        for (index, environment) in environments.enumerated() {
+            var calendar = Calendar(identifier: environment.0)
+            calendar.locale = Locale(identifier: environment.1)
+            calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+            let directory = temporaryDirectory
+                .appendingPathComponent(String(index), isDirectory: true)
+            let saver = ImageFolderSaver(
+                destinationDirectory: directory,
+                now: { date },
+                calendar: calendar
+            )
+
+            let savedURL = try XCTUnwrap(try saver.save(.image(
+                data: try imageData(type: .png),
+                type: ClipboardContentSelector.pngType
+            )))
+
+            XCTAssertEqual(savedURL.lastPathComponent, "20260405-060708.png")
+            XCTAssertNotNil(
+                savedURL.lastPathComponent.range(
+                    of: #"^\d{8}-\d{6}\.png$"#,
+                    options: .regularExpression
+                )
+            )
+            XCTAssertTrue(savedURL.lastPathComponent.unicodeScalars.allSatisfy {
+                $0.isASCII
+            })
+        }
+    }
+
     func testDoesNotCreateDirectoryOrFileForText() throws {
         let savedURL = try makeSaver().save(.text(data: Data("not saved".utf8)))
 
