@@ -1,4 +1,5 @@
 import AppKit
+import UserNotifications
 import XCTest
 @testable import Snapspool
 
@@ -87,11 +88,32 @@ final class ImageIngestionServiceTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: entry.fileURL.path))
     }
 
+    func testRemovingFallbackHistoryDeletesOnlyItsCorrespondingFile() async throws {
+        let service = try makeService(
+            destinationBlocked: true,
+            fallbackBlocked: false,
+            notifier: NotificationSpy()
+        )
+        let firstResult = await service.ingest(try imageContent())
+        let secondResult = await service.ingest(try imageContent())
+        let first = try XCTUnwrap(firstResult)
+        let second = try XCTUnwrap(secondResult)
+        XCTAssertNotEqual(first.fileURL, second.fileURL)
+
+        await service.remove(first)
+
+        let entries = await service.entries
+        XCTAssertEqual(entries, [second])
+        XCTAssertFalse(FileManager.default.fileExists(atPath: first.fileURL.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: second.fileURL.path))
+    }
+
     func testRemovingNormallySavedHistoryKeepsArchivedImageFile() async throws {
+        let notifier = NotificationSpy()
         let service = try makeService(
             destinationBlocked: false,
             fallbackBlocked: false,
-            notifier: NotificationSpy()
+            notifier: notifier
         )
         let ingestedEntry = await service.ingest(try imageContent())
         let entry = try XCTUnwrap(ingestedEntry)
@@ -101,6 +123,32 @@ final class ImageIngestionServiceTests: XCTestCase {
         let entries = await service.entries
         XCTAssertTrue(entries.isEmpty)
         XCTAssertTrue(FileManager.default.fileExists(atPath: entry.fileURL.path))
+        XCTAssertEqual(notifier.destinationFailures, 0)
+        XCTAssertEqual(notifier.fallbackFailures, 0)
+    }
+
+    func testProductionNotifierBuildsRequestsForBothFailureKinds() throws {
+        let recorder = NotificationRequestRecorder()
+        let notifier = UserNotificationImageSaveNotifier { recorder.append($0) }
+
+        notifier.notifyDestinationSaveFailed()
+        notifier.notifyFallbackSaveFailed()
+
+        let requests = recorder.requests
+        XCTAssertEqual(requests.count, 2)
+        XCTAssertEqual(requests.map(\.content.title), ["Snapspool", "Snapspool"])
+        XCTAssertTrue(requests[0].identifier.hasPrefix("image-save-fallback-"))
+        XCTAssertEqual(
+            requests[0].content.body,
+            "画像を保存先へ書き込めなかったため、履歴用の退避領域に保存しました。"
+        )
+        XCTAssertTrue(requests[1].identifier.hasPrefix("image-save-failed-"))
+        XCTAssertEqual(
+            requests[1].content.body,
+            "画像を保存できなかったため、履歴には追加されませんでした。"
+        )
+        XCTAssertNil(requests[0].trigger)
+        XCTAssertNil(requests[1].trigger)
     }
 
     func testTextIsNotSavedOrAddedToImageHistory() async throws {
@@ -201,5 +249,18 @@ private final class SaveThreadObservation: @unchecked Sendable {
 
     func recordCurrentThread() {
         lock.withLock { value = Thread.isMainThread }
+    }
+}
+
+private final class NotificationRequestRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var recordedRequests: [UNNotificationRequest] = []
+
+    var requests: [UNNotificationRequest] {
+        lock.withLock { recordedRequests }
+    }
+
+    func append(_ request: UNNotificationRequest) {
+        lock.withLock { recordedRequests.append(request) }
     }
 }

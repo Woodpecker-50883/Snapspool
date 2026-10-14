@@ -7,11 +7,18 @@ protocol ImageSaveNotifying: Sendable {
 }
 
 final class UserNotificationImageSaveNotifier: ImageSaveNotifying, @unchecked Sendable {
-    private let center: UNUserNotificationCenter
+    private let addRequest: (UNNotificationRequest) -> Void
 
     init(center: UNUserNotificationCenter = .current()) {
-        self.center = center
+        self.addRequest = { request in
+            center.add(request)
+        }
         center.requestAuthorization(options: [.alert]) { _, _ in }
+    }
+
+    /// Keeps notification formatting testable without delivering a real user notification.
+    init(addRequest: @escaping (UNNotificationRequest) -> Void) {
+        self.addRequest = addRequest
     }
 
     func notifyDestinationSaveFailed() {
@@ -34,7 +41,7 @@ final class UserNotificationImageSaveNotifier: ImageSaveNotifying, @unchecked Se
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
-        center.add(UNNotificationRequest(
+        addRequest(UNNotificationRequest(
             identifier: identifier,
             content: content,
             trigger: nil
