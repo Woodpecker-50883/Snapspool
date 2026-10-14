@@ -7,6 +7,7 @@ struct SnapspoolApp: App {
     private let clipboardMonitor: ClipboardMonitor
     private let menuActions: MenuBarActions
     private let historyStore: HistoryStore
+    private let historyPickerController: HistoryPickerController
 
     init() {
         let historyStore = HistoryStore()
@@ -15,12 +16,16 @@ struct SnapspoolApp: App {
         }
         self.historyStore = historyStore
         self.clipboardMonitor = clipboardMonitor
+        historyPickerController = HistoryPickerController(historyStore: historyStore)
         menuActions = MenuBarActions(clipboardMonitor: clipboardMonitor)
         clipboardMonitor.start()
     }
 
     var body: some Scene {
         MenuBarExtra("Snapspool", systemImage: "doc.on.clipboard") {
+            Button("履歴") {
+                historyPickerController.show()
+            }
             Button(menuActions.monitoringMenuTitle) {
                 menuActions.pauseMonitoring()
             }
