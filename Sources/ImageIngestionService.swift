@@ -8,24 +8,33 @@ protocol ImageSaveNotifying: Sendable {
 
 final class UserNotificationImageSaveNotifier: ImageSaveNotifying, @unchecked Sendable {
     private let addRequest: (UNNotificationRequest) -> Void
+    private let localize: (String) -> String
 
-    init(center: UNUserNotificationCenter = .current()) {
+    init(
+        center: UNUserNotificationCenter = .current(),
+        localize: @escaping (String) -> String = { L10n.string($0) }
+    ) {
         self.addRequest = { request in
             center.add(request)
         }
+        self.localize = localize
         center.requestAuthorization(options: [.alert]) { _, _ in }
     }
 
     /// Keeps notification formatting testable without delivering a real user notification.
-    init(addRequest: @escaping (UNNotificationRequest) -> Void) {
+    init(
+        addRequest: @escaping (UNNotificationRequest) -> Void,
+        localize: @escaping (String) -> String = { L10n.string($0) }
+    ) {
         self.addRequest = addRequest
+        self.localize = localize
     }
 
     func notifyDestinationSaveFailed() {
         deliver(
             identifier: "image-save-fallback-\(UUID().uuidString)",
             title: "Snapspool",
-            body: "画像を保存先へ書き込めなかったため、履歴用の退避領域に保存しました。"
+            body: localize("notification.destination-save-failed")
         )
     }
 
@@ -33,7 +42,7 @@ final class UserNotificationImageSaveNotifier: ImageSaveNotifying, @unchecked Se
         deliver(
             identifier: "image-save-failed-\(UUID().uuidString)",
             title: "Snapspool",
-            body: "画像を保存できなかったため、履歴には追加されませんでした。"
+            body: localize("notification.fallback-save-failed")
         )
     }
 

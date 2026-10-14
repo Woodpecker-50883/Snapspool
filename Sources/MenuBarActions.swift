@@ -67,6 +67,7 @@ final class MenuBarActions: NSObject {
     private let terminateApplication: () -> Void
     private let hasHotKeyRegistrationWarning: () -> Bool
     private let showSettings: () -> Void
+    private let localize: (String) -> String
 
     init(
         clipboardMonitor: ClipboardMonitor = ClipboardMonitor { _ in },
@@ -79,12 +80,14 @@ final class MenuBarActions: NSObject {
                 from: nil
             )
         },
+        localize: @escaping (String) -> String = { L10n.string($0) },
         terminateApplication: @escaping () -> Void = { NSApplication.shared.terminate(nil) }
     ) {
         self.clipboardMonitor = clipboardMonitor
         self.showHistoryPicker = showHistoryPicker
         self.hasHotKeyRegistrationWarning = hasHotKeyRegistrationWarning
         self.showSettings = showSettings
+        self.localize = localize
         self.terminateApplication = terminateApplication
     }
 
@@ -93,15 +96,15 @@ final class MenuBarActions: NSObject {
     }
 
     var monitoringMenuTitle: String {
-        isMonitoringPaused ? "監視を再開" : "監視の一時停止"
+        localize(isMonitoringPaused ? "menu.resume-monitoring" : "menu.pause-monitoring")
     }
 
     func makeMenu() -> NSMenu {
         let menu = NSMenu()
-        menu.addItem(makeItem(title: "履歴", action: #selector(openHistory(_:))))
+        menu.addItem(makeItem(title: localize("menu.history"), action: #selector(openHistory(_:))))
         if hasHotKeyRegistrationWarning() {
             let warning = NSMenuItem(
-                title: "⚠︎ ショートカットを登録できません",
+                title: localize("menu.shortcut-warning"),
                 action: nil,
                 keyEquivalent: ""
             )
@@ -109,9 +112,9 @@ final class MenuBarActions: NSObject {
             menu.addItem(warning)
         }
         menu.addItem(makeItem(title: monitoringMenuTitle, action: #selector(pauseMonitoring(_:))))
-        menu.addItem(makeItem(title: "設定", action: #selector(openSettings(_:))))
+        menu.addItem(makeItem(title: localize("menu.settings"), action: #selector(openSettings(_:))))
         menu.addItem(.separator())
-        menu.addItem(makeItem(title: "終了", action: #selector(quit(_:))))
+        menu.addItem(makeItem(title: localize("menu.quit"), action: #selector(quit(_:))))
         return menu
     }
 

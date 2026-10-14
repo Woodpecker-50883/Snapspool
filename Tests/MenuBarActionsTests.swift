@@ -11,7 +11,13 @@ final class MenuBarActionsTests: XCTestCase {
 
         let menu = actions.makeMenu()
 
-        XCTAssertEqual(menu.items.map(\.title), ["履歴", "監視の一時停止", "設定", "", "終了"])
+        XCTAssertEqual(menu.items.map(\.title), [
+            L10n.string("menu.history"),
+            L10n.string("menu.pause-monitoring"),
+            L10n.string("menu.settings"),
+            "",
+            L10n.string("menu.quit"),
+        ])
         XCTAssertEqual(menu.items.map(\.isSeparatorItem), [false, false, false, true, false])
     }
 
@@ -54,7 +60,14 @@ final class MenuBarActionsTests: XCTestCase {
 
         XCTAssertEqual(
             menu.items.map(\.title),
-            ["履歴", "⚠︎ ショートカットを登録できません", "監視の一時停止", "設定", "", "終了"]
+            [
+                L10n.string("menu.history"),
+                L10n.string("menu.shortcut-warning"),
+                L10n.string("menu.pause-monitoring"),
+                L10n.string("menu.settings"),
+                "",
+                L10n.string("menu.quit"),
+            ]
         )
         XCTAssertFalse(try XCTUnwrap(menu.item(at: 1)).isEnabled)
         activate(try XCTUnwrap(menu.item(at: 0)))
@@ -68,11 +81,11 @@ final class MenuBarActionsTests: XCTestCase {
 
         activate(pauseItem)
         XCTAssertTrue(monitor.isPaused)
-        XCTAssertEqual(pauseItem.title, "監視を再開")
+        XCTAssertEqual(pauseItem.title, L10n.string("menu.resume-monitoring"))
 
         activate(pauseItem)
         XCTAssertFalse(monitor.isPaused)
-        XCTAssertEqual(pauseItem.title, "監視の一時停止")
+        XCTAssertEqual(pauseItem.title, L10n.string("menu.pause-monitoring"))
     }
 
     func testBuiltMenuQuitActionTerminatesApplication() throws {

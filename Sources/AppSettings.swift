@@ -280,7 +280,7 @@ public final class AppSettings: ObservableObject {
     func setShortcut(_ candidate: GlobalShortcut) -> Bool {
         guard let hotKeyController else { return false }
         guard hotKeyController.updateShortcut(candidate) else {
-            shortcutErrorMessage = "このショートカットは登録できません。以前の設定を使用します。"
+            shortcutErrorMessage = L10n.string("settings.shortcut-error-message")
             return false
         }
         shortcut = candidate
@@ -346,29 +346,29 @@ public struct AppSettingsView: View {
 
     public var body: some View {
         Form {
-            LabeledContent("保存先フォルダ") {
+            LabeledContent(L10n.string("settings.destination-folder")) {
                 HStack {
                     Text(settings.destinationURL.path)
                         .lineLimit(1)
                         .truncationMode(.middle)
-                    Button("選択…", action: chooseDestination)
+                    Button(L10n.string("settings.choose"), action: chooseDestination)
                 }
             }
             Stepper(value: imageLimitBinding, in: 10...100) {
-                Text("画像の履歴件数: \(settings.imageLimit)")
+                Text(L10n.formatted("settings.image-history-count", settings.imageLimit))
             }
             Stepper(value: textLimitBinding, in: 10...100) {
-                Text("テキストの履歴件数: \(settings.textLimit)")
+                Text(L10n.formatted("settings.text-history-count", settings.textLimit))
             }
-            LabeledContent("ショートカット") {
+            LabeledContent(L10n.string("settings.shortcut")) {
                 HStack {
-                    Picker("修飾キー", selection: shortcutModifiersBinding) {
+                    Picker(L10n.string("settings.modifier-key"), selection: shortcutModifiersBinding) {
                         ForEach(Self.modifierChoices) { choice in
                             Text(choice.title).tag(choice.value)
                         }
                     }
                     .labelsHidden()
-                    Picker("キー", selection: shortcutKeyBinding) {
+                    Picker(L10n.string("settings.key"), selection: shortcutKeyBinding) {
                         ForEach(Self.shortcutKeys) { choice in
                             Text(choice.title).tag(choice.value)
                         }
@@ -380,13 +380,13 @@ public struct AppSettingsView: View {
         .formStyle(.grouped)
         .frame(width: 520, height: 260)
         .alert(
-            "ショートカットを変更できません",
+            L10n.string("settings.shortcut-error-title"),
             isPresented: Binding(
                 get: { settings.shortcutErrorMessage != nil },
                 set: { if !$0 { settings.shortcutErrorMessage = nil } }
             )
         ) {
-            Button("OK", role: .cancel) {}
+            Button(L10n.string("common.ok"), role: .cancel) {}
         } message: {
             Text(settings.shortcutErrorMessage ?? "")
         }

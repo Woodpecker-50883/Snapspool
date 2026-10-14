@@ -1,0 +1,22 @@
+"menu.history" = "履歴";
+"menu.pause-monitoring" = "監視の一時停止";
+"menu.resume-monitoring" = "監視を再開";
+"menu.settings" = "設定";
+"menu.quit" = "終了";
+"menu.shortcut-warning" = "⚠︎ ショートカットを登録できません";
+
+"history.empty" = "履歴がありません";
+
+"settings.destination-folder" = "保存先フォルダ";
+"settings.choose" = "選択…";
+"settings.image-history-count" = "画像の履歴件数: %lld";
+"settings.text-history-count" = "テキストの履歴件数: %lld";
+"settings.shortcut" = "ショートカット";
+"settings.modifier-key" = "修飾キー";
+"settings.key" = "キー";
+"settings.shortcut-error-title" = "ショートカットを変更できません";
+"settings.shortcut-error-message" = "このショートカットは登録できません。以前の設定を使用します。";
+"common.ok" = "OK";
+
+"notification.destination-save-failed" = "画像を保存先へ書き込めなかったため、履歴用の退避領域に保存しました。";
+"notification.fallback-save-failed" = "画像を保存できなかったため、履歴には追加されませんでした。";

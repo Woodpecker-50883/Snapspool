@@ -138,15 +138,9 @@ final class ImageIngestionServiceTests: XCTestCase {
         XCTAssertEqual(requests.count, 2)
         XCTAssertEqual(requests.map(\.content.title), ["Snapspool", "Snapspool"])
         XCTAssertTrue(requests[0].identifier.hasPrefix("image-save-fallback-"))
-        XCTAssertEqual(
-            requests[0].content.body,
-            "画像を保存先へ書き込めなかったため、履歴用の退避領域に保存しました。"
-        )
+        XCTAssertEqual(requests[0].content.body, L10n.string("notification.destination-save-failed"))
         XCTAssertTrue(requests[1].identifier.hasPrefix("image-save-failed-"))
-        XCTAssertEqual(
-            requests[1].content.body,
-            "画像を保存できなかったため、履歴には追加されませんでした。"
-        )
+        XCTAssertEqual(requests[1].content.body, L10n.string("notification.fallback-save-failed"))
         XCTAssertNil(requests[0].trigger)
         XCTAssertNil(requests[1].trigger)
     }

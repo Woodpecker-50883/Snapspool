@@ -1,0 +1,22 @@
+"menu.history" = "History";
+"menu.pause-monitoring" = "Pause Monitoring";
+"menu.resume-monitoring" = "Resume Monitoring";
+"menu.settings" = "Settings";
+"menu.quit" = "Quit";
+"menu.shortcut-warning" = "⚠︎ Unable to Register Shortcut";
+
+"history.empty" = "No History";
+
+"settings.destination-folder" = "Destination Folder";
+"settings.choose" = "Choose…";
+"settings.image-history-count" = "Image History: %lld";
+"settings.text-history-count" = "Text History: %lld";
+"settings.shortcut" = "Shortcut";
+"settings.modifier-key" = "Modifier Key";
+"settings.key" = "Key";
+"settings.shortcut-error-title" = "Unable to Change Shortcut";
+"settings.shortcut-error-message" = "This shortcut cannot be registered. The previous setting will be used.";
+"common.ok" = "OK";
+
+"notification.destination-save-failed" = "The image could not be written to the destination, so it was saved in temporary history storage.";
+"notification.fallback-save-failed" = "The image could not be saved and was not added to history.";

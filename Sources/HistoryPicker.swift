@@ -122,7 +122,7 @@ struct HistoryPickerView: View {
     var body: some View {
         Group {
             if model.entries.isEmpty {
-                Text("履歴がありません")
+                Text(L10n.string("history.empty"))
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
