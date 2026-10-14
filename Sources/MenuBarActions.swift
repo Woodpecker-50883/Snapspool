@@ -12,14 +12,20 @@ public final class SnapspoolRuntime {
     private let historyPickerController: HistoryPickerController
     private let globalHotKeyController: GlobalHotKeyController
     private let settingsWindowController: SettingsWindowController
+    let statusItemController: MenuBarStatusItemController
     public let settings: AppSettings
     public let monitoringState: MonitoringState
 
-    public init() {
+    public convenience init() {
+        self.init(imageSaveNotifier: UserNotificationImageSaveNotifier())
+    }
+
+    init(imageSaveNotifier: any ImageSaveNotifying) {
         let settings = AppSettings()
         let imageDestination = MutableImageDestination(url: settings.destinationURL)
         let imageService = ImageIngestionService(
-            destinationProvider: { imageDestination.snapshot() }
+            destinationProvider: { imageDestination.snapshot() },
+            notifier: imageSaveNotifier
         )
         let historyStore = HistoryStore(
             imageLimit: settings.imageLimit,
@@ -48,7 +54,7 @@ public final class SnapspoolRuntime {
             hotKeyController: globalHotKeyController,
             imageDestination: imageDestination
         )
-        menuActions = MenuBarActions(
+        let menuActions = MenuBarActions(
             clipboardMonitor: clipboardMonitor,
             showHistoryPicker: { pickerController.show() },
             hasHotKeyRegistrationWarning: { [globalHotKeyController] in
@@ -56,6 +62,8 @@ public final class SnapspoolRuntime {
             },
             showSettings: { settingsWindowController.show() }
         )
+        self.menuActions = menuActions
+        statusItemController = MenuBarStatusItemController(menu: menuActions.makeMenu())
     }
 
     public func start() {

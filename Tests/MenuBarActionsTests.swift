@@ -5,6 +5,54 @@ import XCTest
 
 @MainActor
 final class MenuBarActionsTests: XCTestCase {
+    // Keep status items alive for the managed test session.
+    private static var retainedStatusItemControllers: [MenuBarStatusItemController] = []
+    private static var retainedRuntimes: [SnapspoolRuntime] = []
+
+    func testStatusItemControllerConfiguresButtonAndRequiredMenu() throws {
+        guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil else {
+            return
+        }
+        let menu = MenuBarActions(
+            clipboardMonitor: ClipboardMonitor(pasteboard: FakeMenuPasteboard()) { _ in }
+        ).makeMenu()
+
+        let controller = MenuBarStatusItemController(menu: menu)
+        let button = try XCTUnwrap(controller.statusItem.button)
+
+        XCTAssertNotNil(button.image)
+        XCTAssertEqual(button.toolTip, "Snapspool")
+        XCTAssertTrue(controller.statusItem.menu === menu)
+        XCTAssertEqual(menu.items.map(\.title), [
+            L10n.string("menu.history"),
+            L10n.string("menu.pause-monitoring"),
+            L10n.string("menu.settings"),
+            "",
+            L10n.string("menu.quit"),
+        ])
+        Self.retainedStatusItemControllers.append(controller)
+    }
+
+    func testRuntimeOwnsConfiguredStatusItemController() throws {
+        guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil else {
+            return
+        }
+        let runtime = SnapspoolRuntime(imageSaveNotifier: SilentMenuImageSaveNotifier())
+        let statusItem = runtime.statusItemController.statusItem
+
+        XCTAssertNotNil(statusItem.button)
+        XCTAssertNotNil(statusItem.button?.image)
+        XCTAssertEqual(statusItem.button?.toolTip, "Snapspool")
+        XCTAssertEqual(try XCTUnwrap(statusItem.menu).items.map(\.title), [
+            L10n.string("menu.history"),
+            L10n.string("menu.pause-monitoring"),
+            L10n.string("menu.settings"),
+            "",
+            L10n.string("menu.quit"),
+        ])
+        Self.retainedRuntimes.append(runtime)
+    }
+
     func testBuiltMenuContainsRequiredItemsInOrder() {
         let actions = MenuBarActions(
             clipboardMonitor: ClipboardMonitor(pasteboard: FakeMenuPasteboard()) { _ in }
@@ -234,4 +282,9 @@ private final class ApplicationLaunchResult: @unchecked Sendable {
     func snapshot() -> (application: NSRunningApplication?, error: Error?) {
         lock.withLock { (application, error) }
     }
+}
+
+private struct SilentMenuImageSaveNotifier: ImageSaveNotifying {
+    func notifyDestinationSaveFailed() {}
+    func notifyFallbackSaveFailed() {}
 }

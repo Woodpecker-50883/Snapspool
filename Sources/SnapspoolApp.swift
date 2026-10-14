@@ -16,13 +16,11 @@ struct SnapspoolApp: App {
 @MainActor
 private final class SnapspoolAppDelegate: NSObject, NSApplicationDelegate {
     private var runtime: SnapspoolRuntime?
-    private var statusItemController: MenuBarStatusItemController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let runtime = SnapspoolRuntime()
         runtime.start()
 
         self.runtime = runtime
-        statusItemController = MenuBarStatusItemController(menu: runtime.makeMenu())
     }
 }
