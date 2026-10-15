@@ -190,6 +190,22 @@ final class HistoryPickerTests: XCTestCase {
         XCTAssertEqual(representation.pixelsWide, 256)
         XCTAssertEqual(representation.pixelsHigh, 128)
     }
+
+    func testPickerUsesPrecomputedThumbnailWithoutReadingSavedFile() {
+        let thumbnail = NSImage(size: NSSize(width: 32, height: 16))
+        let entry = HistoryEntry(
+            content: .image(ImageHistoryEntry(
+                fileURL: URL(fileURLWithPath: "/tmp/removed-snapspool-image.png"),
+                isFallback: false,
+                thumbnail: thumbnail
+            )),
+            detectionOrder: 0
+        )
+
+        let model = HistoryPickerModel(entries: [entry])
+
+        XCTAssertTrue(model.thumbnails[entry.id] === thumbnail)
+    }
 }
 
 private struct HistoryPickerSilentNotifier: ImageSaveNotifying {

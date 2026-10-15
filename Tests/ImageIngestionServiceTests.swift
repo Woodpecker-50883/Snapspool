@@ -182,22 +182,28 @@ final class ImageIngestionServiceTests: XCTestCase {
         XCTAssertEqual(notifier.fallbackFailures, 0)
     }
 
-    func testPNGEncodingAndFileWritingRunOffTheMainThread() async throws {
-        let observation = SaveThreadObservation()
+    func testPNGEncodingFileWritingAndThumbnailGenerationRunOffTheMainThread() async throws {
+        let saveObservation = ThreadObservation()
+        let thumbnailObservation = ThreadObservation()
         let destination = try directoryURL(named: "destination", blocked: false)
         let fallback = try directoryURL(named: "fallback", blocked: false)
         let service = ImageIngestionService(
             destinationSaver: ImageFolderSaver(
                 destinationDirectory: destination,
-                willSave: { observation.recordCurrentThread() }
+                willSave: { saveObservation.recordCurrentThread() }
             ),
             fallbackSaver: ImageFolderSaver(destinationDirectory: fallback),
-            notifier: NotificationSpy()
+            notifier: NotificationSpy(),
+            thumbnailGenerator: HistoryThumbnailGenerator(
+                willGenerate: { thumbnailObservation.recordCurrentThread() }
+            )
         )
 
-        _ = await service.ingest(try imageContent())
+        let entry = await service.ingest(try imageContent())
 
-        XCTAssertEqual(observation.wasMainThread, false)
+        XCTAssertNotNil(entry?.thumbnail)
+        XCTAssertEqual(saveObservation.wasMainThread, false)
+        XCTAssertEqual(thumbnailObservation.wasMainThread, false)
     }
 
     private func makeService(
@@ -254,7 +260,7 @@ private final class NotificationSpy: ImageSaveNotifying, @unchecked Sendable {
     }
 }
 
-private final class SaveThreadObservation: @unchecked Sendable {
+private final class ThreadObservation: @unchecked Sendable {
     private let lock = NSLock()
     private var value: Bool?
 

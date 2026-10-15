@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import UserNotifications
 
@@ -58,22 +59,25 @@ final class UserNotificationImageSaveNotifier: ImageSaveNotifying, @unchecked Se
     }
 }
 
-struct ImageHistoryEntry: Identifiable, Equatable, Sendable {
+struct ImageHistoryEntry: Identifiable, Equatable, @unchecked Sendable {
     let id: UUID
     let fileURL: URL
     let isFallback: Bool
     let accessLease: SecurityScopedAccessLease?
+    let thumbnail: NSImage?
 
     init(
         id: UUID = UUID(),
         fileURL: URL,
         isFallback: Bool,
-        accessLease: SecurityScopedAccessLease? = nil
+        accessLease: SecurityScopedAccessLease? = nil,
+        thumbnail: NSImage? = nil
     ) {
         self.id = id
         self.fileURL = fileURL
         self.isFallback = isFallback
         self.accessLease = accessLease
+        self.thumbnail = thumbnail
     }
 
     static func == (lhs: ImageHistoryEntry, rhs: ImageHistoryEntry) -> Bool {
@@ -91,6 +95,7 @@ actor ImageIngestionService {
     private let fallbackSaver: ImageFolderSaver
     private let notifier: any ImageSaveNotifying
     private let fileManager: FileManager
+    private let thumbnailGenerator: HistoryThumbnailGenerator
 
     private(set) var entries: [ImageHistoryEntry] = []
 
@@ -100,7 +105,8 @@ actor ImageIngestionService {
             destinationDirectory: ImageIngestionService.defaultFallbackDirectory()
         ),
         notifier: any ImageSaveNotifying = UserNotificationImageSaveNotifier(),
-        fileManager: FileManager = .default
+        fileManager: FileManager = .default,
+        thumbnailGenerator: HistoryThumbnailGenerator = HistoryThumbnailGenerator()
     ) {
         self.destination = {
             ImageDestinationSnapshot(saver: destinationSaver, accessLease: nil)
@@ -108,6 +114,7 @@ actor ImageIngestionService {
         self.fallbackSaver = fallbackSaver
         self.notifier = notifier
         self.fileManager = fileManager
+        self.thumbnailGenerator = thumbnailGenerator
         Self.removeOrphanedFallbackFiles(
             in: fallbackSaver.destinationURL,
             fileManager: fileManager
@@ -120,12 +127,14 @@ actor ImageIngestionService {
             destinationDirectory: ImageIngestionService.defaultFallbackDirectory()
         ),
         notifier: any ImageSaveNotifying = UserNotificationImageSaveNotifier(),
-        fileManager: FileManager = .default
+        fileManager: FileManager = .default,
+        thumbnailGenerator: HistoryThumbnailGenerator = HistoryThumbnailGenerator()
     ) {
         self.destination = destinationProvider
         self.fallbackSaver = fallbackSaver
         self.notifier = notifier
         self.fileManager = fileManager
+        self.thumbnailGenerator = thumbnailGenerator
         Self.removeOrphanedFallbackFiles(
             in: fallbackSaver.destinationURL,
             fileManager: fileManager
@@ -177,7 +186,8 @@ actor ImageIngestionService {
             let entry = ImageHistoryEntry(
                 fileURL: fileURL,
                 isFallback: false,
-                accessLease: destination.accessLease
+                accessLease: destination.accessLease,
+                thumbnail: thumbnailGenerator.make(from: fileURL)
             )
             entries.insert(entry, at: 0)
             return entry
@@ -185,7 +195,11 @@ actor ImageIngestionService {
             destination.accessLease?.releaseFromHistory()
             do {
                 guard let fileURL = try fallbackSaver.save(content) else { return nil }
-                let entry = ImageHistoryEntry(fileURL: fileURL, isFallback: true)
+                let entry = ImageHistoryEntry(
+                    fileURL: fileURL,
+                    isFallback: true,
+                    thumbnail: thumbnailGenerator.make(from: fileURL)
+                )
                 entries.insert(entry, at: 0)
                 notifier.notifyDestinationSaveFailed()
                 return entry

@@ -82,9 +82,22 @@ final class HistoryPickerModel: ObservableObject {
     private func rebuildThumbnails() {
         thumbnails = entries.reduce(into: [:]) { result, entry in
             guard case let .image(imageEntry) = entry.content,
-                  let thumbnail = HistoryThumbnail.make(from: imageEntry.fileURL) else { return }
+                  let thumbnail = imageEntry.thumbnail else { return }
             result[entry.id] = thumbnail
         }
+    }
+}
+
+struct HistoryThumbnailGenerator: @unchecked Sendable {
+    private let willGenerate: @Sendable () -> Void
+
+    init(willGenerate: @escaping @Sendable () -> Void = {}) {
+        self.willGenerate = willGenerate
+    }
+
+    func make(from fileURL: URL) -> NSImage? {
+        willGenerate()
+        return HistoryThumbnail.make(from: fileURL)
     }
 }
 
