@@ -111,6 +111,46 @@ final class AppSettingsTests: XCTestCase {
         XCTAssertEqual(resourceAccess.resolvedBookmarks.count, 1)
     }
 
+    func testDestinationPersistsThroughRealSecurityScopedBookmarkRoundTrip() throws {
+        let destination = temporaryDirectory
+            .appendingPathComponent("system-bookmark", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: destination,
+            withIntermediateDirectories: true
+        )
+        let systemAccess = SystemSecurityScopedResourceAccess()
+        let settings = AppSettings(
+            defaults: defaults,
+            resourceAccess: systemAccess,
+            picturesDirectory: temporaryDirectory.appendingPathComponent("Pictures")
+        )
+
+        guard settings.setDestinationURL(destination) else {
+            throw XCTSkip("The current test sandbox cannot create security-scoped bookmarks")
+        }
+        let bookmark = try XCTUnwrap(defaults.data(forKey: "settings.destinationBookmark"))
+        let resolved: ResolvedSecurityScopedBookmark
+        do {
+            resolved = try systemAccess.resolveBookmark(bookmark)
+        } catch {
+            throw XCTSkip("The current test sandbox cannot resolve security-scoped bookmarks: \(error)")
+        }
+        let relaunched = AppSettings(
+            defaults: defaults,
+            resourceAccess: systemAccess,
+            picturesDirectory: temporaryDirectory.appendingPathComponent("Pictures")
+        )
+
+        XCTAssertEqual(
+            resolved.url.resolvingSymlinksInPath().standardizedFileURL,
+            destination.resolvingSymlinksInPath().standardizedFileURL
+        )
+        XCTAssertEqual(
+            relaunched.destinationURL.resolvingSymlinksInPath().standardizedFileURL,
+            destination.resolvingSymlinksInPath().standardizedFileURL
+        )
+    }
+
     func testCancelledDestinationSelectionKeepsExistingDestination() {
         let resourceAccess = SettingsSecurityScopedResourceAccess()
         let settings = AppSettings(defaults: defaults, resourceAccess: resourceAccess)

@@ -46,13 +46,19 @@ final class GlobalHotKeyTests: XCTestCase {
         XCTAssertTrue(controller.hasRegistrationWarning)
     }
 
-    func testCarbonRegistrarProductionEventAdapterReceivesHotKeyEvent() throws {
+    func testCarbonRegistrarRegistersThroughProductionAPIAndReceivesHotKeyEvent() throws {
         // A standalone XCTest bundle has no NSApplication until requested,
         // whereas the production app has one before runtime startup.
         _ = NSApplication.shared
         let registrar = CarbonGlobalHotKeyRegistrar()
         var invocationCount = 0
-        XCTAssertTrue(registrar.installEventHandler { invocationCount += 1 })
+        let otherwiseUnusedShortcut = GlobalShortcut(
+            keyCode: UInt32(kVK_F19),
+            modifiers: UInt32(cmdKey | optionKey | controlKey | shiftKey)
+        )
+        guard registrar.register(otherwiseUnusedShortcut, handler: { invocationCount += 1 }) else {
+            throw XCTSkip("The current test process cannot register a Carbon global hot key")
+        }
         defer { registrar.unregister() }
 
         var event: EventRef?

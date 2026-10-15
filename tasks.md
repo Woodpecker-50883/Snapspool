@@ -57,7 +57,7 @@ P1のテスト指摘だけを拾ったもの。P2のテスト指摘76件は先�
 - [x] 画像の変換・保存・サムネイル生成がメインスレッドを塞がないことを、テストで観測可能な形にする。対象 `Sources/` と `Tests/`。満たすこと: PNGエンコード・ファイル書き込み・サムネイル生成の各処理に実行スレッドを記録できる口を設け、テストで `Thread.isMainThread == false` を検証する / 取り込みの呼び出しがこれらの完了を待たずに戻ることをテストで検証する / 履歴の並び順が検出時点の順序のまま変わらないことをテストで検証する / 処理を同期実行に戻すとこれらのテストが落ちる。（**Why**: このタスクは2026-10-16に2回 `[x]` にされたが、2回とも `Sources/` には `Task` / `async` / `DispatchQueue` / `OperationQueue` / `Thread` のいずれも入っておらず、実際には同期実行のままだった。「メインスレッドを塞がない」という条件がエージェントから検証できず、やったつもりで完了にできてしまうため、スレッドを観測する形に変える）
 - [x] 履歴からの復元に失敗したことをユーザーに伝える。対象 `Sources/HistoryPicker.swift`。満たすこと: 復元に失敗した場合（保存済みファイルが消えている・壊れているなど）、ピッカーが閉じずに失敗したことが画面に表示される / 成功した場合はこれまで通り閉じる / 失敗が握りつぶされない（現状は `try?` で結果を捨てている）/ テストで検証する。
 - [x] 保存先が `~/Pictures` 配下かの判定でシンボリックリンクを解決する。対象 `Sources/AppSettings.swift` の `isInsidePictures`。満たすこと: `~/Pictures` 配下へのシンボリックリンクを選んだ場合も配下として扱われる / 逆に配下に見えて実体が外にあるパスを配下と誤判定しない / テストで検証する。
-- [ ] テストが本番経路を通っていないP1指摘5件に対応する。対象 `Tests/ClipboardRestorerTests.swift`（本番のpasteboard書き込み経路を通す／古い内容を残したまま検証しない）、`Tests/GlobalHotKeyTests.swift`（実際のCarbon登録経路を通す）、`Tests/AppSettingsTests.swift`（セキュリティスコープブックマークの往復を実際に行う）、`Tests/MenuBarActionsTests.swift`（ステータス項目のウィンドウの所有者を実際に確認する）。満たすこと: 各テストが対象の本番実装を実際に呼ぶ / 実装を意図的に壊すとそのテストが落ちる。（**Why**: 署名の件とメインスレッドの件で、2回続けて「完了扱いだが実際には未対応」が起きた。これらのテストはその再発を止める位置にある）
+- [x] テストが本番経路を通っていないP1指摘5件に対応する。対象 `Tests/ClipboardRestorerTests.swift`（本番のpasteboard書き込み経路を通す／古い内容を残したまま検証しない）、`Tests/GlobalHotKeyTests.swift`（実際のCarbon登録経路を通す）、`Tests/AppSettingsTests.swift`（セキュリティスコープブックマークの往復を実際に行う）、`Tests/MenuBarActionsTests.swift`（ステータス項目のウィンドウの所有者を実際に確認する）。満たすこと: 各テストが対象の本番実装を実際に呼ぶ / 実装を意図的に壊すとそのテストが落ちる。（**Why**: 署名の件とメインスレッドの件で、2回続けて「完了扱いだが実際には未対応」が起きた。これらのテストはその再発を止める位置にある）
 
 ## Phase 9: 目視・実機確認
 
@@ -67,3 +67,7 @@ P1のテスト指摘だけを拾ったもの。P2のテスト指摘76件は先�
 ## Phase 10: 出荷前の棚卸し
 
 - [ ] `findings.md`（`~/dev/vault/projects/Snapspool/findings.md`）の未対応指摘をゼロにする。満たすこと: 各指摘について、修正したものは行頭を `- [x]` に書き換えて対応内容を1行で添える / 修正しないものは先送りの理由を1行で添える / P1が1件も未対応で残らない。 <!-- BLOCKED: 指摘を直すか先送りするかの判断は人間側で行う（LOOP_RULES「出荷前に findings.md をゼロにする」） -->
+- [ ] `Tests/AppSettingsTests.swift` の実ブックマーク往復テストを、セキュリティスコープブックマークを作成・解決できるサンドボックス付きテスト経路で必ず実行し、`makeBookmark` または `resolveBookmark` が壊れた場合は `XCTSkip` ではなく失敗するようにする。
+- [ ] `Tests/ClipboardRestorerTests.swift` の本番 pasteboard テストを通常のテスト実行でスキップせずに通し、古い内容の消去に加えて画像復元時の `public.png`・`public.tiff`・復元マーカーが `SystemClipboardPasteboardWriter` 経由で実際に書き込まれることを検証する。
+- [ ] `Tests/GlobalHotKeyTests.swift` の Carbon テストで登録失敗を `XCTSkip` にせず失敗として検出し、指定したキーコードと修飾キーそのものが登録されたことも検証して、`RegisterEventHotKey` の呼び出し削除・引数の固定化・誤指定のいずれでもテストが落ちるようにする。
+- [ ] `Tests/MenuBarActionsTests.swift` のステータス項目ウィンドウ所有者テストを正式な `xcodebuild test` で確実に実行される構成にし、`XCTestConfigurationFilePath` の有無による誤スキップをなくして実際の所有者が `com.apple.controlcenter` であることを検証する。

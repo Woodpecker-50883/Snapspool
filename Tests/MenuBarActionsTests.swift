@@ -39,6 +39,34 @@ final class MenuBarActionsTests: XCTestCase {
         Self.retainedStatusItemControllers.append(controller)
     }
 
+    func testStatusItemWindowIsActuallyOwnedByControlCenter() throws {
+        try XCTSkipIf(
+            ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil,
+            "テストバンドルを直接実行した場合はWindowServer上のステータス項目を生成できないためスキップ（xcodebuild test でのみ実行される）"
+        )
+        _ = NSApplication.shared
+        let menu = MenuBarActions(
+            clipboardMonitor: ClipboardMonitor(pasteboard: FakeMenuPasteboard()) { _ in }
+        ).makeMenu()
+        let controller = MenuBarStatusItemController(menu: menu)
+        let button = try XCTUnwrap(controller.statusItem.button)
+        let window = try XCTUnwrap(button.window)
+
+        RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        let windowInfo = try XCTUnwrap(try XCTUnwrap(
+            CGWindowListCopyWindowInfo(
+                [.optionIncludingWindow],
+                CGWindowID(window.windowNumber)
+            ) as? [[String: Any]]
+        ).first)
+        let ownerNumber = try XCTUnwrap(windowInfo[kCGWindowOwnerPID as String] as? NSNumber)
+        let ownerPID = pid_t(ownerNumber.int32Value)
+        let owner = try XCTUnwrap(NSRunningApplication(processIdentifier: ownerPID))
+
+        XCTAssertEqual(owner.bundleIdentifier, "com.apple.controlcenter")
+        Self.retainedStatusItemControllers.append(controller)
+    }
+
     func testStatusItemControllerKeepsMenuUsableWhenAssetLoadingFails() throws {
         try XCTSkipIf(
             ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil,
