@@ -146,4 +146,4 @@
 - [ ] `findings.md`（`~/dev/vault/projects/Snapspool/findings.md`）の未対応指摘をゼロにする。満たすこと: 各指摘について、修正したものは行頭を `- [x]` に書き換えて対応内容を1行で添える / 修正しないものは先送りの理由を1行で添える / P1が1件も未対応で残らない。 <!-- BLOCKED: 指摘を直すか先送りするかの判断は人間側で行う（LOOP_RULES「出荷前に findings.md をゼロにする」） -->
 - [x] `Tests/ClipboardRestorerTests.swift` で一時的な `NSPasteboard` に対して `SystemClipboardPasteboardWriter.replaceContents` を実際に呼び、既存内容のクリアと全表現の書き込みを検証して、本番pasteboard書き込み処理を壊した場合にテストが失敗するよう修正する。
 - [x] `SnapspoolRuntime` がホットキー登録結果の確定後にメニューバーの内容を更新し、設定済みキーと既定キーの両方の登録に失敗した場合に警告を表示しつつ「履歴」から履歴一覧を開ける状態を維持し、その起動順序を本番経路のテストで検証する。
-- [ ] `Tests/MenuBarActionsTests.swift` に残っている、Snapspoolプロセス所有の `layer=25` ウィンドウを要求する検証不能な起動テストを、Phase 8.6で定めたアプリ内部からのステータス項目生成検証へ完全に置き換え、通常の `xcodebuild test` で環境依存の失敗を起こさないようにする。
+- [x] `Tests/MenuBarActionsTests.swift` に残っている、Snapspoolプロセス所有の `layer=25` ウィンドウを要求する検証不能な起動テストを、Phase 8.6で定めたアプリ内部からのステータス項目生成検証へ完全に置き換え、通常の `xcodebuild test` で環境依存の失敗を起こさないようにする。

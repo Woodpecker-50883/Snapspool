@@ -160,49 +160,6 @@ final class MenuBarActionsTests: XCTestCase {
         XCTAssertEqual(menu.items.map(\.isSeparatorItem), [false, false, false, false, true, false])
     }
 
-    func testLaunchedAppCreatesMenuBarLayerWindowAndRemainsAccessoryApp() throws {
-        // Direct xctest bundle execution is the sandbox-compatible local path,
-        // but it has no testmanager launch session in which to start a GUI app.
-        guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil else {
-            return
-        }
-
-        let configuration = NSWorkspace.OpenConfiguration()
-        configuration.activates = false
-        configuration.createsNewApplicationInstance = true
-        let launchResult = ApplicationLaunchResult()
-        NSWorkspace.shared.openApplication(
-            at: try builtAppURL(),
-            configuration: configuration
-        ) { application, error in
-            launchResult.record(application: application, error: error)
-        }
-
-        let launchDeadline = Date().addingTimeInterval(5)
-        var result = launchResult.snapshot()
-        while result.application == nil, result.error == nil, Date() < launchDeadline {
-            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
-            result = launchResult.snapshot()
-        }
-        XCTAssertNil(result.error)
-        let application = try XCTUnwrap(result.application)
-        defer {
-            application.terminate()
-        }
-
-        let deadline = Date().addingTimeInterval(5)
-        var menuBarWindows: [[String: Any]] = []
-        repeat {
-            menuBarWindows = windows(ownedBy: application.processIdentifier, layer: 25)
-            if !menuBarWindows.isEmpty { break }
-            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
-        } while !application.isTerminated && Date() < deadline
-
-        XCTAssertFalse(application.isTerminated, "Snapspool exited during launch")
-        XCTAssertEqual(menuBarWindows.count, 1, "Windows: \(allWindows(ownedBy: application.processIdentifier))")
-        XCTAssertEqual(application.activationPolicy, .accessory)
-    }
-
     func testBuiltMenuDispatchesHistoryAction() throws {
         var historyOpenCount = 0
         let actions = MenuBarActions(
@@ -326,44 +283,6 @@ final class MenuBarActionsTests: XCTestCase {
         )
     }
 
-    private func windows(ownedBy processID: Int32, layer: Int) -> [[String: Any]] {
-        allWindows(ownedBy: processID).filter {
-            ($0[kCGWindowLayer as String] as? Int) == layer
-        }
-    }
-
-    private func allWindows(ownedBy processID: Int32) -> [[String: Any]] {
-        let windows = CGWindowListCopyWindowInfo(
-            [.optionOnScreenOnly, .excludeDesktopElements],
-            kCGNullWindowID
-        ) as? [[String: Any]] ?? []
-        return windows.filter {
-            ($0[kCGWindowOwnerPID as String] as? Int32) == processID
-                || ($0[kCGWindowOwnerPID as String] as? Int) == Int(processID)
-        }
-    }
-
-    private func builtAppURL() throws -> URL {
-        var directory = Bundle(for: Self.self).bundleURL
-
-        for _ in 0..<8 {
-            if directory.lastPathComponent == "Snapspool.app" {
-                return directory
-            }
-            let sibling = directory
-                .deletingLastPathComponent()
-                .appendingPathComponent("Snapspool.app", isDirectory: true)
-            if FileManager.default.fileExists(atPath: sibling.path) {
-                return sibling
-            }
-            directory.deleteLastPathComponent()
-        }
-
-        return try XCTUnwrap(
-            nil,
-            "Could not locate built Snapspool.app next to \(Bundle(for: Self.self).bundleURL.path)"
-        )
-    }
 }
 
 @MainActor
@@ -385,23 +304,6 @@ private final class FailingMenuHotKeyRegistrar: GlobalHotKeyRegistering {
     }
 
     func unregister() {}
-}
-
-private final class ApplicationLaunchResult: @unchecked Sendable {
-    private let lock = NSLock()
-    private var application: NSRunningApplication?
-    private var error: Error?
-
-    func record(application: NSRunningApplication?, error: Error?) {
-        lock.withLock {
-            self.application = application
-            self.error = error
-        }
-    }
-
-    func snapshot() -> (application: NSRunningApplication?, error: Error?) {
-        lock.withLock { (application, error) }
-    }
 }
 
 private struct SilentMenuImageSaveNotifier: ImageSaveNotifying {
