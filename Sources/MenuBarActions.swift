@@ -92,17 +92,40 @@ public final class SnapspoolRuntime {
 public final class MenuBarStatusItemController {
     let statusItem: NSStatusItem
 
-    public init(menu: NSMenu) {
+    public convenience init(menu: NSMenu) {
+        self.init(menu: menu) {
+            Self.loadMenuBarImage()
+        }
+    }
+
+    init(menu: NSMenu, loadImage: () -> NSImage?) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
-            button.image = NSImage(
-                systemSymbolName: "doc.on.clipboard",
-                accessibilityDescription: "Snapspool"
-            )
-            button.image?.isTemplate = true
-            button.toolTip = "Snapspool"
+            Self.configure(button: button, image: loadImage())
         }
         statusItem.menu = menu
+    }
+
+    static func loadMenuBarImage(
+        from bundle: Bundle = Bundle(for: MenuBarStatusItemController.self)
+    ) -> NSImage? {
+        guard let image = bundle.image(forResource: NSImage.Name("MenuBarIcon")) else {
+            return nil
+        }
+        image.isTemplate = true
+        image.accessibilityDescription = "Snapspool"
+        return image
+    }
+
+    static func configure(button: NSButton, image: NSImage?) {
+        if let image {
+            button.image = image
+        } else {
+            // Keep the status item visible and usable even if the asset is
+            // missing or cannot be decoded in a damaged installation.
+            button.title = "Snapspool"
+        }
+        button.toolTip = "Snapspool"
     }
 
     deinit {

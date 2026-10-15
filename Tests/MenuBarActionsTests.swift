@@ -20,7 +20,10 @@ final class MenuBarActionsTests: XCTestCase {
         let controller = MenuBarStatusItemController(menu: menu)
         let button = try XCTUnwrap(controller.statusItem.button)
 
-        XCTAssertNotNil(button.image)
+        let image = try XCTUnwrap(button.image)
+        XCTAssertTrue(image.isTemplate)
+        XCTAssertEqual(image.accessibilityDescription, "Snapspool")
+        XCTAssertEqual(button.title, "")
         XCTAssertEqual(button.toolTip, "Snapspool")
         XCTAssertTrue(controller.statusItem.menu === menu)
         XCTAssertEqual(menu.items.map(\.title), [
@@ -32,6 +35,45 @@ final class MenuBarActionsTests: XCTestCase {
             L10n.string("menu.quit"),
         ])
         Self.retainedStatusItemControllers.append(controller)
+    }
+
+    func testStatusItemControllerKeepsMenuUsableWhenAssetLoadingFails() throws {
+        guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil else {
+            return
+        }
+        let menu = MenuBarActions(
+            clipboardMonitor: ClipboardMonitor(pasteboard: FakeMenuPasteboard()) { _ in }
+        ).makeMenu()
+
+        let controller = MenuBarStatusItemController(menu: menu, loadImage: { nil })
+        let button = try XCTUnwrap(controller.statusItem.button)
+
+        XCTAssertNil(button.image)
+        XCTAssertEqual(button.title, "Snapspool")
+        XCTAssertEqual(button.toolTip, "Snapspool")
+        XCTAssertTrue(controller.statusItem.menu === menu)
+        XCTAssertGreaterThan(controller.statusItem.length, 0)
+        Self.retainedStatusItemControllers.append(controller)
+    }
+
+    func testBundledMenuBarAssetLoadsAsTemplateWithoutSFSymbolFallback() throws {
+        let image = try XCTUnwrap(MenuBarStatusItemController.loadMenuBarImage(
+            from: Bundle(for: Self.self)
+        ))
+
+        XCTAssertTrue(image.isTemplate)
+        XCTAssertEqual(image.accessibilityDescription, "Snapspool")
+        XCTAssertEqual(image.size, NSSize(width: 18, height: 18))
+    }
+
+    func testMissingMenuBarAssetUsesVisibleTextFallback() {
+        let button = NSButton()
+
+        MenuBarStatusItemController.configure(button: button, image: nil)
+
+        XCTAssertNil(button.image)
+        XCTAssertEqual(button.title, "Snapspool")
+        XCTAssertEqual(button.toolTip, "Snapspool")
     }
 
     func testRuntimeOwnsConfiguredStatusItemController() throws {

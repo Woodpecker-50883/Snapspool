@@ -129,8 +129,8 @@
 生成スクリプトは `Tools/generate_icons.swift`（`swift Tools/generate_icons.swift <出力先>` で再生成できる）。
 画像自体を作り直すタスクではない。
 
-- [ ] アセットカタログをビルドに組み込む。対象 `xcodegen.yml` / `Info.plist`。満たすこと: `Resources/Assets.xcassets` がアプリターゲットのリソースに含まれる / ビルドした `Snapspool.app` の中に `Assets.car` が生成される / `Info.plist` の `CFBundleIconName` が `AppIcon` を指す / Finderで `Snapspool.app` を見たときに白紙ではなくこのアイコンが表示される / App Sandboxとentitlementsの設定は変わらない。
-- [ ] メニューバーのアイコンをアセットカタログの画像に差し替える。対象 `Sources/MenuBarActions.swift`。満たすこと: ステータス項目の画像が `MenuBarIcon` から読み込まれる / テンプレート画像として扱われ、ライト・ダークどちらのメニューバーでも視認できる / SF Symbol `doc.on.clipboard` への依存が残らない / 画像の読み込みに失敗した場合もアプリが起動し、メニューは開ける。
+- [x] アセットカタログをビルドに組み込む。対象 `xcodegen.yml` / `Info.plist`。満たすこと: `Resources/Assets.xcassets` がアプリターゲットのリソースに含まれる / ビルドした `Snapspool.app` の中に `Assets.car` が生成される / `Info.plist` の `CFBundleIconName` が `AppIcon` を指す / Finderで `Snapspool.app` を見たときに白紙ではなくこのアイコンが表示される / App Sandboxとentitlementsの設定は変わらない。
+- [x] メニューバーのアイコンをアセットカタログの画像に差し替える。対象 `Sources/MenuBarActions.swift`。満たすこと: ステータス項目の画像が `MenuBarIcon` から読み込まれる / テンプレート画像として扱われ、ライト・ダークどちらのメニューバーでも視認できる / SF Symbol `doc.on.clipboard` への依存が残らない / 画像の読み込みに失敗した場合もアプリが起動し、メニューは開ける。
 
 ## Phase 9: 目視・実機確認
 

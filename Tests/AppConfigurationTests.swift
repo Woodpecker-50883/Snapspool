@@ -19,6 +19,35 @@ final class BuildArtifactConfigurationTests: XCTestCase {
         XCTAssertEqual(info["LSUIElement"] as? Bool, true)
     }
 
+    func testBuiltAppContainsCompiledAppIconAssets() throws {
+        let appURL = try builtAppURL()
+        let infoURL = appURL.appendingPathComponent("Contents/Info.plist")
+        let data = try Data(contentsOf: infoURL)
+        let propertyList = try PropertyListSerialization.propertyList(from: data, format: nil)
+        let info = try XCTUnwrap(propertyList as? [String: Any])
+
+        XCTAssertEqual(info["CFBundleIconName"] as? String, "AppIcon")
+
+        let assetsURL = appURL.appendingPathComponent("Contents/Resources/Assets.car")
+        var isDirectory: ObjCBool = false
+        XCTAssertTrue(
+            FileManager.default.fileExists(atPath: assetsURL.path, isDirectory: &isDirectory),
+            "The built app does not contain a compiled asset catalog at \(assetsURL.path)"
+        )
+        XCTAssertFalse(isDirectory.boolValue)
+        let attributes = try FileManager.default.attributesOfItem(atPath: assetsURL.path)
+        XCTAssertGreaterThan(attributes[.size] as? UInt64 ?? 0, 0)
+
+        let iconURL = appURL.appendingPathComponent("Contents/Resources/AppIcon.icns")
+        XCTAssertTrue(
+            FileManager.default.fileExists(atPath: iconURL.path, isDirectory: &isDirectory),
+            "The built app does not contain the Finder icon at \(iconURL.path)"
+        )
+        XCTAssertFalse(isDirectory.boolValue)
+        let iconAttributes = try FileManager.default.attributesOfItem(atPath: iconURL.path)
+        XCTAssertGreaterThan(iconAttributes[.size] as? UInt64 ?? 0, 0)
+    }
+
     func testBuiltAppContainsRequiredSandboxEntitlements() throws {
         let result = try run(
             "/usr/bin/codesign",
