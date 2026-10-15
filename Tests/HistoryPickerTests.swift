@@ -13,6 +13,28 @@ final class HistoryPickerTests: XCTestCase {
         XCTAssertEqual(model.selectedID, newer.id)
     }
 
+    func testHeaderCountsImagesAndTextsSeparately() {
+        let text = HistoryEntry(content: .text(Data("text".utf8)), detectionOrder: 3)
+        let firstImage = HistoryEntry(
+            content: .image(ImageHistoryEntry(
+                fileURL: URL(fileURLWithPath: "/tmp/first.png"),
+                isFallback: false
+            )),
+            detectionOrder: 2
+        )
+        let secondImage = HistoryEntry(
+            content: .image(ImageHistoryEntry(
+                fileURL: URL(fileURLWithPath: "/tmp/second.png"),
+                isFallback: false
+            )),
+            detectionOrder: 1
+        )
+        let model = HistoryPickerModel(entries: [text, firstImage, secondImage])
+
+        XCTAssertEqual(model.imageCount, 2)
+        XCTAssertEqual(model.textCount, 1)
+    }
+
     func testTextPreviewUsesFirstLineAndAtMostEightyCharacters() {
         let multiline = HistoryEntry(
             content: .text(Data((String(repeating: "a", count: 90) + "\nignored").utf8)),

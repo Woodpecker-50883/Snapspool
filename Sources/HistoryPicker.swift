@@ -11,6 +11,22 @@ final class HistoryPickerModel: ObservableObject {
     var onConfirm: (HistoryEntry) -> Void
     var onDismiss: () -> Void
 
+    var imageCount: Int {
+        entries.reduce(into: 0) { count, entry in
+            if case .image = entry.content { count += 1 }
+        }
+    }
+
+    var textCount: Int {
+        entries.reduce(into: 0) { count, entry in
+            if case .text = entry.content { count += 1 }
+        }
+    }
+
+    var countSummary: String {
+        L10n.formatted("history.count-summary", imageCount, textCount)
+    }
+
     init(
         entries: [HistoryEntry] = [],
         onConfirm: @escaping (HistoryEntry) -> Void = { _ in },
@@ -120,29 +136,55 @@ struct HistoryPickerView: View {
     @ObservedObject var model: HistoryPickerModel
 
     var body: some View {
-        Group {
-            if model.entries.isEmpty {
-                Text(L10n.string("history.empty"))
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        LazyVStack(spacing: 4) {
-                            ForEach(model.entries) { entry in
-                                row(for: entry)
-                                    .id(entry.id)
+        VStack(spacing: 0) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Snapspool")
+                        .font(.headline)
+                    Text(model.countSummary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+
+            Divider()
+
+            Group {
+                if model.entries.isEmpty {
+                    Text(L10n.string("history.empty"))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            LazyVStack(spacing: 4) {
+                                ForEach(model.entries) { entry in
+                                    row(for: entry)
+                                        .id(entry.id)
+                                }
                             }
+                            .padding(8)
                         }
-                        .padding(8)
-                    }
-                    .onChange(of: model.selectedID) { _, selectedID in
-                        if let selectedID {
-                            proxy.scrollTo(selectedID, anchor: .center)
+                        .onChange(of: model.selectedID) { _, selectedID in
+                            if let selectedID {
+                                proxy.scrollTo(selectedID, anchor: .center)
+                            }
                         }
                     }
                 }
             }
+
+            Divider()
+
+            Text(L10n.string("history.controls-hint"))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
         }
         .frame(width: 420, height: 480)
     }

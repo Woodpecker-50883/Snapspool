@@ -12,6 +12,11 @@ final class LocalizationTests: XCTestCase {
         "menu.quit": ("Quit", "終了"),
         "menu.shortcut-warning": ("⚠︎ Unable to Register Shortcut", "⚠︎ ショートカットを登録できません"),
         "history.empty": ("No History", "履歴がありません"),
+        "history.count-summary": ("Images: %lld  Text: %lld", "画像: %lld件  テキスト: %lld件"),
+        "history.controls-hint": (
+            "↑↓ Move  •  Return Select  •  Esc Close",
+            "↑↓ 選択を移動  •  Return 確定  •  Esc 閉じる"
+        ),
         "settings.destination-folder": ("Destination Folder", "保存先フォルダ"),
         "settings.choose": ("Choose…", "選択…"),
         "settings.image-history-count": ("Image History: %lld", "画像の履歴件数: %lld"),
@@ -83,6 +88,11 @@ final class LocalizationTests: XCTestCase {
 
         XCTAssertEqual(String(format: englishFormat, 30), "Image History: 30")
         XCTAssertEqual(String(format: japaneseFormat, 30), "画像の履歴件数: 30")
+
+        let englishHistoryFormat = L10n.string("history.count-summary", bundle: appBundle, language: "en")
+        let japaneseHistoryFormat = L10n.string("history.count-summary", bundle: appBundle, language: "ja")
+        XCTAssertEqual(String(format: englishHistoryFormat, 2, 1), "Images: 2  Text: 1")
+        XCTAssertEqual(String(format: japaneseHistoryFormat, 2, 1), "画像: 2件  テキスト: 1件")
     }
 
     private func builtAppURL() throws -> URL {

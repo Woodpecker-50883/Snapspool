@@ -7,6 +7,8 @@
 "menu.shortcut-warning" = "⚠︎ Unable to Register Shortcut";
 
 "history.empty" = "No History";
+"history.count-summary" = "Images: %lld  Text: %lld";
+"history.controls-hint" = "↑↓ Move  •  Return Select  •  Esc Close";
 
 "settings.destination-folder" = "Destination Folder";
 "settings.choose" = "Choose…";
