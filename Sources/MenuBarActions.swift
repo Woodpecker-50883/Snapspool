@@ -13,7 +13,15 @@ public final class SnapspoolRuntime {
     private let globalHotKeyController: GlobalHotKeyController
     private let settingsWindowController: SettingsWindowController
     private let firstLaunchSetupController: FirstLaunchSetupController
-    let statusItemController: MenuBarStatusItemController
+    private let presentStatusMenu: @MainActor (NSMenu) -> Void
+    private let presentFirstLaunchSetupOnStart: @MainActor () -> Void
+    private let ownedStatusItemController: MenuBarStatusItemController?
+    var statusItemController: MenuBarStatusItemController {
+        guard let ownedStatusItemController else {
+            preconditionFailure("SnapspoolRuntime was created without a status item")
+        }
+        return ownedStatusItemController
+    }
     public let settings: AppSettings
     public let monitoringState: MonitoringState
 
@@ -21,8 +29,16 @@ public final class SnapspoolRuntime {
         self.init(imageSaveNotifier: UserNotificationImageSaveNotifier())
     }
 
-    init(imageSaveNotifier: any ImageSaveNotifying) {
-        let settings = AppSettings()
+    init(
+        imageSaveNotifier: any ImageSaveNotifying,
+        settings: AppSettings = AppSettings(),
+        hotKeyRegistrar: any GlobalHotKeyRegistering = CarbonGlobalHotKeyRegistrar(),
+        clipboardPasteboard: any ClipboardPasteboardReading = SystemClipboardPasteboard(),
+        showHistoryPicker: (@MainActor @Sendable () -> Void)? = nil,
+        presentStatusMenu: (@MainActor (NSMenu) -> Void)? = nil,
+        presentFirstLaunchSetupOnStart: (@MainActor () -> Void)? = nil,
+        createStatusItem: Bool = true
+    ) {
         let imageDestination = MutableImageDestination(url: settings.destinationURL)
         let imageService = ImageIngestionService(
             destinationProvider: { imageDestination.snapshot() },
@@ -36,9 +52,13 @@ public final class SnapspoolRuntime {
         let pickerController = HistoryPickerController(historyStore: historyStore)
         let settingsWindowController = SettingsWindowController(settings: settings)
         let monitoringState = MonitoringState()
-        let clipboardMonitor = ClipboardMonitor(monitoringState: monitoringState) { content in
+        let clipboardMonitor = ClipboardMonitor(
+            pasteboard: clipboardPasteboard,
+            monitoringState: monitoringState
+        ) { content in
             historyStore.ingest(content)
         }
+        let openHistoryPicker = showHistoryPicker ?? { pickerController.show() }
 
         self.historyStore = historyStore
         self.settings = settings
@@ -48,9 +68,13 @@ public final class SnapspoolRuntime {
         self.settingsWindowController = settingsWindowController
         let firstLaunchSetupController = FirstLaunchSetupController()
         self.firstLaunchSetupController = firstLaunchSetupController
+        self.presentFirstLaunchSetupOnStart = presentFirstLaunchSetupOnStart ?? {
+            _ = firstLaunchSetupController.showIfNeeded()
+        }
         globalHotKeyController = GlobalHotKeyController(
+            registrar: hotKeyRegistrar,
             configuredShortcut: settings.shortcut,
-            showHistoryPicker: { pickerController.show() }
+            showHistoryPicker: openHistoryPicker
         )
         settings.connect(
             historyStore: historyStore,
@@ -59,7 +83,7 @@ public final class SnapspoolRuntime {
         )
         let menuActions = MenuBarActions(
             clipboardMonitor: clipboardMonitor,
-            showHistoryPicker: { pickerController.show() },
+            showHistoryPicker: openHistoryPicker,
             hasHotKeyRegistrationWarning: { [globalHotKeyController] in
                 globalHotKeyController.hasRegistrationWarning
             },
@@ -67,13 +91,29 @@ public final class SnapspoolRuntime {
             showSetupGuide: { firstLaunchSetupController.show() }
         )
         self.menuActions = menuActions
-        statusItemController = MenuBarStatusItemController(menu: menuActions.makeMenu())
+        let statusItemController = createStatusItem
+            ? MenuBarStatusItemController(menu: menuActions.makeMenu())
+            : nil
+        ownedStatusItemController = statusItemController
+        self.presentStatusMenu = presentStatusMenu ?? { [weak statusItemController] menu in
+            statusItemController?.updateMenu(menu)
+        }
     }
 
     public func start() {
+        startCoreServices()
+        presentFirstLaunchSetupOnStart()
+    }
+
+    func startCoreServices() {
         clipboardMonitor.start()
         globalHotKeyController.start()
-        presentFirstLaunchSetupIfNeeded()
+        presentStatusMenu(menuActions.makeMenu())
+    }
+
+    func stop() {
+        clipboardMonitor.stop()
+        globalHotKeyController.stop()
     }
 
     @discardableResult
@@ -84,6 +124,7 @@ public final class SnapspoolRuntime {
     public func makeMenu() -> NSMenu {
         menuActions.makeMenu()
     }
+
 }
 
 /// Owns the AppKit status item for the lifetime of the application. Using an
@@ -103,6 +144,10 @@ public final class MenuBarStatusItemController {
         if let button = statusItem.button {
             Self.configure(button: button, image: loadImage())
         }
+        statusItem.menu = menu
+    }
+
+    func updateMenu(_ menu: NSMenu) {
         statusItem.menu = menu
     }
 

@@ -1,4 +1,5 @@
 import AppKit
+import Carbon.HIToolbox
 import Combine
 import XCTest
 @testable import Snapspool
@@ -95,6 +96,50 @@ final class MenuBarActionsTests: XCTestCase {
             L10n.string("menu.quit"),
         ])
         Self.retainedRuntimes.append(runtime)
+    }
+
+    func testRuntimeRefreshesMenuAfterBothStartupHotKeyRegistrationsFail() throws {
+        let suiteName = "MenuBarActionsTests.hotKeyFailure.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let configuredShortcut = GlobalShortcut(
+            keyCode: UInt32(kVK_ANSI_B),
+            modifiers: UInt32(cmdKey | optionKey)
+        )
+        defaults.set(Int(configuredShortcut.keyCode), forKey: "settings.shortcut.keyCode")
+        defaults.set(Int(configuredShortcut.modifiers), forKey: "settings.shortcut.modifiers")
+        let registrar = FailingMenuHotKeyRegistrar()
+        var historyOpenCount = 0
+        var presentedMenu: NSMenu?
+        let runtime = SnapspoolRuntime(
+            imageSaveNotifier: SilentMenuImageSaveNotifier(),
+            settings: AppSettings(defaults: defaults),
+            hotKeyRegistrar: registrar,
+            clipboardPasteboard: FakeMenuPasteboard(),
+            showHistoryPicker: { historyOpenCount += 1 },
+            presentStatusMenu: { presentedMenu = $0 },
+            presentFirstLaunchSetupOnStart: {},
+            createStatusItem: false
+        )
+        defer { runtime.stop() }
+
+        runtime.start()
+
+        XCTAssertEqual(registrar.attempts, [configuredShortcut, .defaultShortcut])
+        let refreshedMenu = try XCTUnwrap(presentedMenu)
+        XCTAssertEqual(refreshedMenu.items.map(\.title), [
+            L10n.string("menu.history"),
+            L10n.string("menu.shortcut-warning"),
+            L10n.string("menu.pause-monitoring"),
+            L10n.string("menu.settings"),
+            L10n.string("menu.setup-guide"),
+            "",
+            L10n.string("menu.quit"),
+        ])
+        XCTAssertFalse(try XCTUnwrap(refreshedMenu.item(at: 1)).isEnabled)
+
+        activate(try XCTUnwrap(refreshedMenu.item(at: 0)))
+        XCTAssertEqual(historyOpenCount, 1)
     }
 
     func testBuiltMenuContainsRequiredItemsInOrder() {
@@ -325,6 +370,21 @@ final class MenuBarActionsTests: XCTestCase {
 private final class FakeMenuPasteboard: ClipboardPasteboardReading {
     var changeCount = 0
     var items: [any PasteboardItemReading] = []
+}
+
+@MainActor
+private final class FailingMenuHotKeyRegistrar: GlobalHotKeyRegistering {
+    private(set) var attempts: [GlobalShortcut] = []
+
+    func register(
+        _ shortcut: GlobalShortcut,
+        handler: @MainActor @Sendable @escaping () -> Void
+    ) -> Bool {
+        attempts.append(shortcut)
+        return false
+    }
+
+    func unregister() {}
 }
 
 private final class ApplicationLaunchResult: @unchecked Sendable {
