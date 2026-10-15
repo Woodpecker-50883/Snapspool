@@ -9,6 +9,7 @@
 "history.empty" = "履歴がありません";
 "history.count-summary" = "画像: %lld件  テキスト: %lld件";
 "history.controls-hint" = "↑↓ 選択を移動  •  Return 確定  •  Esc 閉じる";
+"history.restore-failed" = "この項目を復元できませんでした。保存済みファイルが消失または破損している可能性があります。";
 
 "settings.destination-folder" = "保存先フォルダ";
 "settings.choose" = "選択…";

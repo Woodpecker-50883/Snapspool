@@ -98,6 +98,67 @@ final class HistoryPickerTests: XCTestCase {
         XCTAssertEqual(dismissCount, 2)
     }
 
+    func testFailedRestorationDisplaysErrorAndKeepsPickerOpen() {
+        let missingURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("png")
+        let entry = HistoryEntry(
+            content: .image(ImageHistoryEntry(fileURL: missingURL, isFallback: false)),
+            detectionOrder: 0
+        )
+        let pasteboard = HistoryPickerWritablePasteboard()
+        var dismissCount = 0
+        let restorer = ClipboardRestorer(pasteboard: pasteboard)
+        let model = HistoryPickerModel(
+            entries: [entry],
+            onConfirm: { try restorer.restore($0) },
+            onDismiss: { dismissCount += 1 }
+        )
+
+        model.confirmSelection()
+
+        XCTAssertEqual(model.restorationErrorMessage, L10n.string("history.restore-failed"))
+        XCTAssertEqual(dismissCount, 0)
+        XCTAssertEqual(pasteboard.replaceCallCount, 0)
+    }
+
+    func testSuccessfulRestorationClearsPreviousErrorAndDismissesPicker() {
+        let missingEntry = HistoryEntry(
+            content: .image(ImageHistoryEntry(
+                fileURL: FileManager.default.temporaryDirectory
+                    .appendingPathComponent(UUID().uuidString),
+                isFallback: false
+            )),
+            detectionOrder: 1
+        )
+        let textData = Data("restorable text".utf8)
+        let textEntry = HistoryEntry(content: .text(textData), detectionOrder: 0)
+        let pasteboard = HistoryPickerWritablePasteboard()
+        var dismissCount = 0
+        let restorer = ClipboardRestorer(pasteboard: pasteboard)
+        let model = HistoryPickerModel(
+            entries: [missingEntry, textEntry],
+            onConfirm: { try restorer.restore($0) },
+            onDismiss: { dismissCount += 1 }
+        )
+
+        model.confirm(missingEntry)
+        XCTAssertNotNil(model.restorationErrorMessage)
+
+        model.confirm(textEntry)
+
+        XCTAssertNil(model.restorationErrorMessage)
+        XCTAssertEqual(dismissCount, 1)
+        XCTAssertEqual(
+            pasteboard.dataByType[ClipboardContentSelector.plainTextType],
+            textData
+        )
+        XCTAssertEqual(
+            pasteboard.dataByType[ClipboardContentSelector.restoredType],
+            Data()
+        )
+    }
+
     func testEmptyHistoryHasNoSelectionOrConfirmation() {
         var didConfirm = false
         let model = HistoryPickerModel(entries: [], onConfirm: { _ in didConfirm = true })
@@ -211,4 +272,16 @@ final class HistoryPickerTests: XCTestCase {
 private struct HistoryPickerSilentNotifier: ImageSaveNotifying {
     func notifyDestinationSaveFailed() {}
     func notifyFallbackSaveFailed() {}
+}
+
+@MainActor
+private final class HistoryPickerWritablePasteboard: ClipboardPasteboardWriting {
+    private(set) var dataByType: [NSPasteboard.PasteboardType: Data] = [:]
+    private(set) var replaceCallCount = 0
+
+    func replaceContents(with representations: [PasteboardRepresentation]) -> Bool {
+        replaceCallCount += 1
+        dataByType = Dictionary(uniqueKeysWithValues: representations.map { ($0.type, $0.data) })
+        return true
+    }
 }

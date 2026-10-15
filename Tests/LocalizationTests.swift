@@ -17,6 +17,10 @@ final class LocalizationTests: XCTestCase {
             "↑↓ Move  •  Return Select  •  Esc Close",
             "↑↓ 選択を移動  •  Return 確定  •  Esc 閉じる"
         ),
+        "history.restore-failed": (
+            "This item could not be restored. Its saved file may be missing or damaged.",
+            "この項目を復元できませんでした。保存済みファイルが消失または破損している可能性があります。"
+        ),
         "settings.destination-folder": ("Destination Folder", "保存先フォルダ"),
         "settings.choose": ("Choose…", "選択…"),
         "settings.image-history-count": ("Image History: %lld", "画像の履歴件数: %lld"),

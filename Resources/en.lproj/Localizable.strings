@@ -9,6 +9,7 @@
 "history.empty" = "No History";
 "history.count-summary" = "Images: %lld  Text: %lld";
 "history.controls-hint" = "↑↓ Move  •  Return Select  •  Esc Close";
+"history.restore-failed" = "This item could not be restored. Its saved file may be missing or damaged.";
 
 "settings.destination-folder" = "Destination Folder";
 "settings.choose" = "Choose…";

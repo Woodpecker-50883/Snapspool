@@ -6,9 +6,10 @@ import SwiftUI
 final class HistoryPickerModel: ObservableObject {
     @Published private(set) var entries: [HistoryEntry]
     @Published var selectedID: UUID?
+    @Published private(set) var restorationErrorMessage: String?
 
     private(set) var thumbnails: [UUID: NSImage] = [:]
-    var onConfirm: (HistoryEntry) -> Void
+    var onConfirm: (HistoryEntry) throws -> Void
     var onDismiss: () -> Void
 
     var imageCount: Int {
@@ -29,11 +30,12 @@ final class HistoryPickerModel: ObservableObject {
 
     init(
         entries: [HistoryEntry] = [],
-        onConfirm: @escaping (HistoryEntry) -> Void = { _ in },
+        onConfirm: @escaping (HistoryEntry) throws -> Void = { _ in },
         onDismiss: @escaping () -> Void = {}
     ) {
         self.entries = entries
         selectedID = entries.first?.id
+        restorationErrorMessage = nil
         self.onConfirm = onConfirm
         self.onDismiss = onDismiss
         rebuildThumbnails()
@@ -42,6 +44,7 @@ final class HistoryPickerModel: ObservableObject {
     func replaceEntries(_ entries: [HistoryEntry]) {
         self.entries = entries
         selectedID = entries.first?.id
+        restorationErrorMessage = nil
         rebuildThumbnails()
     }
 
@@ -57,14 +60,12 @@ final class HistoryPickerModel: ObservableObject {
     func confirmSelection() {
         guard let selectedID,
               let entry = entries.first(where: { $0.id == selectedID }) else { return }
-        onConfirm(entry)
-        onDismiss()
+        restore(entry)
     }
 
     func confirm(_ entry: HistoryEntry) {
         selectedID = entry.id
-        onConfirm(entry)
-        onDismiss()
+        restore(entry)
     }
 
     func cancel() {
@@ -84,6 +85,16 @@ final class HistoryPickerModel: ObservableObject {
             guard case let .image(imageEntry) = entry.content,
                   let thumbnail = imageEntry.thumbnail else { return }
             result[entry.id] = thumbnail
+        }
+    }
+
+    private func restore(_ entry: HistoryEntry) {
+        do {
+            try onConfirm(entry)
+            restorationErrorMessage = nil
+            onDismiss()
+        } catch {
+            restorationErrorMessage = L10n.string("history.restore-failed")
         }
     }
 }
@@ -249,6 +260,18 @@ struct HistoryPickerView: View {
                 }
             }
             .frame(height: HistoryPickerLayout.listHeight(for: model))
+            .overlay(alignment: .bottom) {
+                if let message = model.restorationErrorMessage {
+                    Label(message, systemImage: "exclamationmark.triangle.fill")
+                        .font(.callout)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.red.opacity(0.92))
+                        .accessibilityIdentifier("history.restore-error")
+                }
+            }
 
             Divider()
 
@@ -370,7 +393,8 @@ final class HistoryPickerController: NSObject, NSWindowDelegate {
             }
         }
         model.onConfirm = { [weak restorer] entry in
-            try? restorer?.restore(entry)
+            guard let restorer else { return }
+            try restorer.restore(entry)
         }
         model.onDismiss = { [weak self] in
             self?.dismiss()
