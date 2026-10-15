@@ -96,6 +96,10 @@ actor ImageIngestionService {
     private let notifier: any ImageSaveNotifying
     private let fileManager: FileManager
     private let thumbnailGenerator: HistoryThumbnailGenerator
+    private let processingQueue = DispatchQueue(
+        label: "app.snapspool.image-processing",
+        qos: .userInitiated
+    )
 
     private(set) var entries: [ImageHistoryEntry] = []
 
@@ -171,43 +175,53 @@ actor ImageIngestionService {
     }
 
     @discardableResult
-    func ingest(_ content: ClipboardContent) -> ImageHistoryEntry? {
+    func ingest(_ content: ClipboardContent) async -> ImageHistoryEntry? {
         guard case .image = content else { return nil }
 
         let destination = destination()
         // This temporary history reference also keeps the security scope open
         // if the user changes destinations while encoding or writing is active.
         destination.accessLease?.retainForHistory()
-        do {
-            guard let fileURL = try destination.makeSaver().save(content) else {
-                destination.accessLease?.releaseFromHistory()
-                return nil
-            }
-            let entry = ImageHistoryEntry(
-                fileURL: fileURL,
-                isFallback: false,
-                accessLease: destination.accessLease,
-                thumbnail: thumbnailGenerator.make(from: fileURL)
-            )
-            entries.insert(entry, at: 0)
-            return entry
-        } catch {
-            destination.accessLease?.releaseFromHistory()
-            do {
-                guard let fileURL = try fallbackSaver.save(content) else { return nil }
-                let entry = ImageHistoryEntry(
-                    fileURL: fileURL,
-                    isFallback: true,
-                    thumbnail: thumbnailGenerator.make(from: fileURL)
-                )
-                entries.insert(entry, at: 0)
-                notifier.notifyDestinationSaveFailed()
-                return entry
-            } catch {
-                notifier.notifyFallbackSaveFailed()
-                return nil
+        let fallbackSaver = fallbackSaver
+        let notifier = notifier
+        let thumbnailGenerator = thumbnailGenerator
+        let entry: ImageHistoryEntry? = await withCheckedContinuation {
+            (continuation: CheckedContinuation<ImageHistoryEntry?, Never>) in
+            processingQueue.async {
+                do {
+                    guard let fileURL = try destination.makeSaver().save(content) else {
+                        destination.accessLease?.releaseFromHistory()
+                        return continuation.resume(returning: nil)
+                    }
+                    continuation.resume(returning: ImageHistoryEntry(
+                        fileURL: fileURL,
+                        isFallback: false,
+                        accessLease: destination.accessLease,
+                        thumbnail: thumbnailGenerator.make(from: fileURL)
+                    ))
+                } catch {
+                    destination.accessLease?.releaseFromHistory()
+                    do {
+                        guard let fileURL = try fallbackSaver.save(content) else {
+                            return continuation.resume(returning: nil)
+                        }
+                        notifier.notifyDestinationSaveFailed()
+                        continuation.resume(returning: ImageHistoryEntry(
+                            fileURL: fileURL,
+                            isFallback: true,
+                            thumbnail: thumbnailGenerator.make(from: fileURL)
+                        ))
+                    } catch {
+                        notifier.notifyFallbackSaveFailed()
+                        continuation.resume(returning: nil)
+                    }
+                }
             }
         }
+        if let entry {
+            entries.insert(entry, at: 0)
+        }
+        return entry
     }
 
     func remove(_ entry: ImageHistoryEntry) {

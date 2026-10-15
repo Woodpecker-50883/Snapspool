@@ -11,9 +11,10 @@ final class MenuBarActionsTests: XCTestCase {
     private static var retainedRuntimes: [SnapspoolRuntime] = []
 
     func testStatusItemControllerConfiguresButtonAndRequiredMenu() throws {
-        guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil else {
-            return
-        }
+        try XCTSkipIf(
+            ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil,
+            "テストバンドルを直接実行した場合はステータス項目を生成できないためスキップ（xcodebuild test でのみ実行される）"
+        )
         let menu = MenuBarActions(
             clipboardMonitor: ClipboardMonitor(pasteboard: FakeMenuPasteboard()) { _ in }
         ).makeMenu()
@@ -39,9 +40,10 @@ final class MenuBarActionsTests: XCTestCase {
     }
 
     func testStatusItemControllerKeepsMenuUsableWhenAssetLoadingFails() throws {
-        guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil else {
-            return
-        }
+        try XCTSkipIf(
+            ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil,
+            "テストバンドルを直接実行した場合はステータス項目を生成できないためスキップ（xcodebuild test でのみ実行される）"
+        )
         let menu = MenuBarActions(
             clipboardMonitor: ClipboardMonitor(pasteboard: FakeMenuPasteboard()) { _ in }
         ).makeMenu()
@@ -53,7 +55,7 @@ final class MenuBarActionsTests: XCTestCase {
         XCTAssertEqual(button.title, "Snapspool")
         XCTAssertEqual(button.toolTip, "Snapspool")
         XCTAssertTrue(controller.statusItem.menu === menu)
-        XCTAssertGreaterThan(controller.statusItem.length, 0)
+        XCTAssertTrue(controller.statusItem.isVisible)
         Self.retainedStatusItemControllers.append(controller)
     }
 
@@ -78,9 +80,10 @@ final class MenuBarActionsTests: XCTestCase {
     }
 
     func testRuntimeOwnsConfiguredStatusItemController() throws {
-        guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil else {
-            return
-        }
+        try XCTSkipIf(
+            ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil,
+            "テストバンドルを直接実行した場合はステータス項目を生成できないためスキップ（xcodebuild test でのみ実行される）"
+        )
         let runtime = SnapspoolRuntime(imageSaveNotifier: SilentMenuImageSaveNotifier())
         let statusItem = runtime.statusItemController.statusItem
 

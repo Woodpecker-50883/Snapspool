@@ -11,7 +11,8 @@ struct ImageFolderSaver: @unchecked Sendable {
     private let fileManager: FileManager
     private let now: () -> Date
     private let namingTimeZone: TimeZone
-    private let willSave: @Sendable () -> Void
+    private let willEncodePNG: @Sendable () -> Void
+    private let willWriteFile: @Sendable () -> Void
 
     var destinationURL: URL { destinationDirectory }
 
@@ -20,13 +21,15 @@ struct ImageFolderSaver: @unchecked Sendable {
         fileManager: FileManager = .default,
         now: @escaping () -> Date = Date.init,
         calendar: Calendar = .current,
-        willSave: @escaping @Sendable () -> Void = {}
+        willEncodePNG: @escaping @Sendable () -> Void = {},
+        willWriteFile: @escaping @Sendable () -> Void = {}
     ) {
         self.destinationDirectory = destinationDirectory
         self.fileManager = fileManager
         self.now = now
         self.namingTimeZone = calendar.timeZone
-        self.willSave = willSave
+        self.willEncodePNG = willEncodePNG
+        self.willWriteFile = willWriteFile
     }
 
     static func defaultDestinationDirectory(
@@ -45,8 +48,8 @@ struct ImageFolderSaver: @unchecked Sendable {
     @discardableResult
     func save(_ content: ClipboardContent) throws -> URL? {
         guard case let .image(data, _) = content else { return nil }
-        willSave()
 
+        willEncodePNG()
         guard let bitmap = NSBitmapImageRep(data: data) else {
             throw ImageFolderSaverError.invalidImageData
         }
@@ -60,6 +63,7 @@ struct ImageFolderSaver: @unchecked Sendable {
         )
 
         let fileURL = nextAvailableFileURL(for: now())
+        willWriteFile()
         try pngData.write(to: fileURL, options: .withoutOverwriting)
         return fileURL
     }

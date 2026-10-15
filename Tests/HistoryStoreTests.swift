@@ -116,12 +116,50 @@ final class HistoryStoreTests: XCTestCase {
     }
 
     func testAsyncImageIngestionKeepsDetectionOrderWhileMainActorHandlesNewerText() async throws {
-        let store = HistoryStore(imageIngestionService: imageService)
+        let encodingThread = ThreadObservation()
+        let writingThread = ThreadObservation()
+        let thumbnailThread = ThreadObservation()
+        let encodingStarted = expectation(description: "PNG encoding started")
+        let allowEncoding = DispatchSemaphore(value: 0)
+        let destination = temporaryDirectory.appendingPathComponent("observed-destination")
+        let fallback = temporaryDirectory.appendingPathComponent("observed-fallback")
+        let service = ImageIngestionService(
+            destinationSaver: ImageFolderSaver(
+                destinationDirectory: destination,
+                willEncodePNG: {
+                    encodingThread.recordCurrentThread()
+                    encodingStarted.fulfill()
+                    _ = allowEncoding.wait(timeout: .now() + 1)
+                },
+                willWriteFile: { writingThread.recordCurrentThread() }
+            ),
+            fallbackSaver: ImageFolderSaver(destinationDirectory: fallback),
+            notifier: SilentNotifier(),
+            thumbnailGenerator: HistoryThumbnailGenerator(
+                willGenerate: { thumbnailThread.recordCurrentThread() }
+            )
+        )
+        let store = HistoryStore(imageIngestionService: service)
 
+        let callStarted = ProcessInfo.processInfo.systemUptime
         let imageTask = try XCTUnwrap(store.ingest(try imageContent()))
+        let callDuration = ProcessInfo.processInfo.systemUptime - callStarted
+
+        XCTAssertLessThan(
+            callDuration,
+            0.2,
+            "Image ingestion must return without waiting for background processing"
+        )
+        XCTAssertEqual(store.imageCount, 0)
+        await fulfillment(of: [encodingStarted], timeout: 1)
         store.ingest(.text(data: Data("newer".utf8)))
+        XCTAssertEqual(store.textCount, 1, "The main actor must remain responsive during encoding")
+        allowEncoding.signal()
         await imageTask.value
 
+        XCTAssertEqual(encodingThread.wasMainThread, false)
+        XCTAssertEqual(writingThread.wasMainThread, false)
+        XCTAssertEqual(thumbnailThread.wasMainThread, false)
         XCTAssertEqual(store.entries.count, 2)
         guard case .text = store.entries[0].content,
               case .image = store.entries[1].content else {
@@ -218,4 +256,17 @@ final class HistoryStoreTests: XCTestCase {
 private final class SilentNotifier: ImageSaveNotifying, @unchecked Sendable {
     func notifyDestinationSaveFailed() {}
     func notifyFallbackSaveFailed() {}
+}
+
+private final class ThreadObservation: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: Bool?
+
+    var wasMainThread: Bool? {
+        lock.withLock { value }
+    }
+
+    func recordCurrentThread() {
+        lock.withLock { value = Thread.isMainThread }
+    }
 }
