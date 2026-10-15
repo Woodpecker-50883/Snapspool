@@ -109,6 +109,61 @@ final class HistoryPickerTests: XCTestCase {
         XCTAssertFalse(didConfirm)
     }
 
+    func testPickerHeightShrinksForEmptyAndShortHistoriesAndKeepsItsWidth() {
+        let emptyModel = HistoryPickerModel()
+        let oneEntryModel = HistoryPickerModel(entries: [
+            HistoryEntry(content: .text(Data("only entry".utf8)), detectionOrder: 0)
+        ])
+
+        let emptySize = HistoryPickerLayout.contentSize(for: emptyModel)
+        let oneEntrySize = HistoryPickerLayout.contentSize(for: oneEntryModel)
+
+        XCTAssertEqual(emptySize.width, 420)
+        XCTAssertEqual(oneEntrySize.width, 420)
+        XCTAssertLessThan(emptySize.height, 480)
+        XCTAssertLessThan(oneEntrySize.height, 480)
+    }
+
+    func testPickerHeightStopsAtMaximumWhenRowsNeedScrolling() {
+        let entries = (0..<20).map { index in
+            HistoryEntry(
+                content: .text(Data("entry \(index)".utf8)),
+                detectionOrder: UInt64(index)
+            )
+        }
+        let model = HistoryPickerModel(entries: entries)
+
+        XCTAssertEqual(HistoryPickerLayout.contentSize(for: model).height, 480)
+    }
+
+    func testControllerResizesPanelFromCurrentStoreContentsBeforeShowing() {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let imageService = ImageIngestionService(
+            destinationSaver: ImageFolderSaver(
+                destinationDirectory: temporaryDirectory.appendingPathComponent("destination")
+            ),
+            fallbackSaver: ImageFolderSaver(
+                destinationDirectory: temporaryDirectory.appendingPathComponent("fallback")
+            ),
+            notifier: HistoryPickerSilentNotifier()
+        )
+        let store = HistoryStore(imageIngestionService: imageService)
+        store.recordDetection(of: .text(data: Data("only entry".utf8)))
+        let controller = HistoryPickerController(historyStore: store)
+
+        controller.show()
+        defer { controller.dismiss() }
+
+        XCTAssertEqual(controller.contentSize.width, 420, accuracy: 0.5)
+        XCTAssertLessThan(controller.contentSize.height, 480)
+        XCTAssertEqual(
+            controller.contentSize.height,
+            HistoryPickerLayout.contentSize(for: HistoryPickerModel(entries: store.entries)).height,
+            accuracy: 0.5
+        )
+    }
+
     func testImageThumbnailLongestEdgeIsAtMost256Pixels() throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -135,4 +190,9 @@ final class HistoryPickerTests: XCTestCase {
         XCTAssertEqual(representation.pixelsWide, 256)
         XCTAssertEqual(representation.pixelsHigh, 128)
     }
+}
+
+private struct HistoryPickerSilentNotifier: ImageSaveNotifying {
+    func notifyDestinationSaveFailed() {}
+    func notifyFallbackSaveFailed() {}
 }

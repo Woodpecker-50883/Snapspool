@@ -132,6 +132,65 @@ enum HistoryThumbnail {
     }
 }
 
+@MainActor
+enum HistoryPickerLayout {
+    static let width: CGFloat = 420
+    static let maximumHeight: CGFloat = 480
+
+    private static let headerHeight: CGFloat = 61
+    private static let footerHeight: CGFloat = 37
+    private static let dividerHeight: CGFloat = 1
+    private static let verticalListPadding: CGFloat = 16
+    private static let rowSpacing: CGFloat = 4
+    private static let textRowHeight: CGFloat = 33
+    private static let missingImageRowHeight: CGFloat = 64
+    private static let emptyListHeight: CGFloat = 64
+
+    static func contentSize(for model: HistoryPickerModel) -> NSSize {
+        NSSize(width: width, height: contentHeight(for: model))
+    }
+
+    static func listHeight(for model: HistoryPickerModel) -> CGFloat {
+        let availableHeight = maximumHeight
+            - headerHeight
+            - footerHeight
+            - (dividerHeight * 2)
+        return min(desiredListHeight(for: model), availableHeight)
+    }
+
+    private static func contentHeight(for model: HistoryPickerModel) -> CGFloat {
+        headerHeight
+            + footerHeight
+            + (dividerHeight * 2)
+            + listHeight(for: model)
+    }
+
+    private static func desiredListHeight(for model: HistoryPickerModel) -> CGFloat {
+        guard !model.entries.isEmpty else { return emptyListHeight }
+
+        let rowsHeight = model.entries.reduce(CGFloat.zero) { height, entry in
+            height + rowHeight(for: entry, thumbnails: model.thumbnails)
+        }
+        let spacing = rowSpacing * CGFloat(max(0, model.entries.count - 1))
+        return verticalListPadding + rowsHeight + spacing
+    }
+
+    private static func rowHeight(
+        for entry: HistoryEntry,
+        thumbnails: [UUID: NSImage]
+    ) -> CGFloat {
+        switch entry.content {
+        case .text:
+            return textRowHeight
+        case .image:
+            guard let thumbnail = thumbnails[entry.id] else {
+                return missingImageRowHeight
+            }
+            return min(CGFloat(HistoryThumbnail.maximumPixelLength), thumbnail.size.height) + 16
+        }
+    }
+}
+
 struct HistoryPickerView: View {
     @ObservedObject var model: HistoryPickerModel
 
@@ -176,6 +235,7 @@ struct HistoryPickerView: View {
                     }
                 }
             }
+            .frame(height: HistoryPickerLayout.listHeight(for: model))
 
             Divider()
 
@@ -186,7 +246,10 @@ struct HistoryPickerView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
         }
-        .frame(width: 420, height: 480)
+        .frame(
+            width: HistoryPickerLayout.width,
+            height: HistoryPickerLayout.contentSize(for: model).height
+        )
     }
 
     @ViewBuilder
@@ -269,7 +332,10 @@ final class HistoryPickerController: NSObject, NSWindowDelegate {
         self.restorer = restorer
         model = HistoryPickerModel()
         panel = HistoryPickerPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 420, height: 480),
+            contentRect: NSRect(
+                origin: .zero,
+                size: HistoryPickerLayout.contentSize(for: model)
+            ),
             styleMask: [.titled, .nonactivatingPanel, .fullSizeContentView],
             backing: .buffered,
             defer: false
@@ -300,9 +366,14 @@ final class HistoryPickerController: NSObject, NSWindowDelegate {
 
     func show() {
         model.replaceEntries(historyStore.entries)
+        panel.setContentSize(HistoryPickerLayout.contentSize(for: model))
         panel.center()
         panel.orderFrontRegardless()
         panel.makeKey()
+    }
+
+    var contentSize: NSSize {
+        panel.contentView?.bounds.size ?? .zero
     }
 
     func dismiss() {
