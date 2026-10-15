@@ -36,6 +36,11 @@ final class LocalizationTests: XCTestCase {
             "Images are saved to ~/Pictures/Snapspool/ by default. You can choose a different folder in Settings.",
             "画像の既定の保存先は ~/Pictures/Snapspool/ です。設定画面から別のフォルダへ変更できます。"
         ),
+        "setup.manual-settings-path": (
+            "If System Settings does not open, go to System Settings > Keyboard > Keyboard Shortcuts > Screenshots.",
+            "システム設定が開かない場合は、システム設定 > キーボード > キーボードショートカット > スクリーンショット の順に開いてください。"
+        ),
+        "setup.open-settings": ("Open Keyboard Shortcuts…", "キーボードショートカットを開く…"),
         "setup.done": ("Done", "完了"),
         "notification.destination-save-failed": (
             "The image could not be written to the destination, so it was saved in temporary history storage.",

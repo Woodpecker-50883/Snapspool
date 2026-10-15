@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 import XCTest
 @testable import Snapspool
 
@@ -35,12 +36,48 @@ final class FirstLaunchSetupTests: XCTestCase {
         XCTAssertTrue(english.shortcutInstructions.contains("Copy picture of selected area to the clipboard"))
         XCTAssertTrue(english.destinationInstructions.contains("~/Pictures/Snapspool/"))
         XCTAssertTrue(english.destinationInstructions.contains("Settings"))
+        XCTAssertEqual(english.openSettingsButtonTitle, "Open Keyboard Shortcuts…")
+        XCTAssertTrue(english.manualSettingsPath.contains("System Settings > Keyboard > Keyboard Shortcuts > Screenshots"))
 
         XCTAssertTrue(japanese.introduction.contains("スクリーンショットをクリップボードにコピー"))
         XCTAssertTrue(japanese.shortcutInstructions.contains("ファイルとして保存"))
         XCTAssertTrue(japanese.shortcutInstructions.contains("クリップボードにコピー"))
         XCTAssertTrue(japanese.destinationInstructions.contains("~/Pictures/Snapspool/"))
         XCTAssertTrue(japanese.destinationInstructions.contains("設定画面"))
+        XCTAssertEqual(japanese.openSettingsButtonTitle, "キーボードショートカットを開く…")
+        XCTAssertTrue(japanese.manualSettingsPath.contains("システム設定 > キーボード > キーボードショートカット > スクリーンショット"))
+    }
+
+    func testSystemSettingsOpenerUsesKeyboardShortcutsDeepLinkAndReportsResult() {
+        var openedURLs: [URL] = []
+        let successfulOpener = SystemKeyboardShortcutSettingsOpener { url in
+            openedURLs.append(url)
+            return true
+        }
+
+        XCTAssertTrue(successfulOpener.open())
+        XCTAssertEqual(openedURLs, [SystemKeyboardShortcutSettingsOpener.settingsURL])
+        XCTAssertEqual(
+            openedURLs.first?.absoluteString,
+            "x-apple.systempreferences:com.apple.Keyboard-Settings.extension?Shortcuts"
+        )
+
+        let failingOpener = SystemKeyboardShortcutSettingsOpener { _ in false }
+        XCTAssertFalse(failingOpener.open())
+    }
+
+    func testSetupControllerButtonActionUsesSystemSettingsOpener() {
+        var openedURL: URL?
+        let opener = SystemKeyboardShortcutSettingsOpener { url in
+            openedURL = url
+            return true
+        }
+        let controller = FirstLaunchSetupController(settingsOpener: opener)
+        let hostingController = controller.window?.contentViewController
+            as? NSHostingController<FirstLaunchSetupView>
+
+        hostingController?.rootView.openSettings()
+        XCTAssertEqual(openedURL, SystemKeyboardShortcutSettingsOpener.settingsURL)
     }
 
     private func builtAppURL() throws -> URL {

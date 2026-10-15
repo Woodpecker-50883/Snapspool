@@ -22,6 +22,8 @@
 "setup.introduction" = "To use screenshots with Snapspool, enable a macOS screenshot shortcut that copies screenshots to the clipboard.";
 "setup.shortcut-instructions" = "You can move the key combination you already use from “Save picture of selected area as a file” to “Copy picture of selected area to the clipboard” and keep taking screenshots with the same keys.";
 "setup.destination-instructions" = "Images are saved to ~/Pictures/Snapspool/ by default. You can choose a different folder in Settings.";
+"setup.manual-settings-path" = "If System Settings does not open, go to System Settings > Keyboard > Keyboard Shortcuts > Screenshots.";
+"setup.open-settings" = "Open Keyboard Shortcuts…";
 "setup.done" = "Done";
 
 "notification.destination-save-failed" = "The image could not be written to the destination, so it was saved in temporary history storage.";

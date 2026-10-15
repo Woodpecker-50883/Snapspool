@@ -6,6 +6,8 @@ struct SetupGuideContent: Equatable {
     let introduction: String
     let shortcutInstructions: String
     let destinationInstructions: String
+    let manualSettingsPath: String
+    let openSettingsButtonTitle: String
     let doneButtonTitle: String
 
     static func localized(
@@ -25,13 +27,41 @@ struct SetupGuideContent: Equatable {
                 bundle: bundle,
                 language: language
             ),
+            manualSettingsPath: L10n.string(
+                "setup.manual-settings-path",
+                bundle: bundle,
+                language: language
+            ),
+            openSettingsButtonTitle: L10n.string(
+                "setup.open-settings",
+                bundle: bundle,
+                language: language
+            ),
             doneButtonTitle: L10n.string("setup.done", bundle: bundle, language: language)
         )
     }
 }
 
-private struct FirstLaunchSetupView: View {
+struct SystemKeyboardShortcutSettingsOpener {
+    static let settingsURL = URL(
+        string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension?Shortcuts"
+    )!
+
+    private let openURL: (URL) -> Bool
+
+    init(openURL: @escaping (URL) -> Bool = { NSWorkspace.shared.open($0) }) {
+        self.openURL = openURL
+    }
+
+    @discardableResult
+    func open() -> Bool {
+        openURL(Self.settingsURL)
+    }
+}
+
+struct FirstLaunchSetupView: View {
     let content: SetupGuideContent
+    let openSettings: () -> Void
     let dismiss: () -> Void
 
     var body: some View {
@@ -41,7 +71,9 @@ private struct FirstLaunchSetupView: View {
             Text(content.introduction)
             Text(content.shortcutInstructions)
             Text(content.destinationInstructions)
+            Text(content.manualSettingsPath)
             HStack {
+                Button(content.openSettingsButtonTitle, action: openSettings)
                 Spacer()
                 Button(content.doneButtonTitle, action: dismiss)
                     .keyboardShortcut(.defaultAction)
@@ -59,7 +91,11 @@ final class FirstLaunchSetupController: NSWindowController, NSWindowDelegate {
 
     private let defaults: UserDefaults
 
-    init(defaults: UserDefaults = .standard, content: SetupGuideContent = .localized()) {
+    init(
+        defaults: UserDefaults = .standard,
+        content: SetupGuideContent = .localized(),
+        settingsOpener: SystemKeyboardShortcutSettingsOpener = .init()
+    ) {
         self.defaults = defaults
 
         let window = NSWindow()
@@ -67,9 +103,11 @@ final class FirstLaunchSetupController: NSWindowController, NSWindowDelegate {
         window.styleMask = [.titled, .closable]
         window.isReleasedWhenClosed = false
         window.contentViewController = NSHostingController(
-            rootView: FirstLaunchSetupView(content: content) { [weak window] in
-                window?.close()
-            }
+            rootView: FirstLaunchSetupView(
+                content: content,
+                openSettings: { _ = settingsOpener.open() },
+                dismiss: { [weak window] in window?.close() }
+            )
         )
         window.center()
 

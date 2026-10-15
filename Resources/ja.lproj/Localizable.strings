@@ -22,6 +22,8 @@
 "setup.introduction" = "スクリーンショットをSnapspoolで扱うには、macOSの「スクリーンショットをクリップボードにコピー」のショートカットを有効にしてください。";
 "setup.shortcut-instructions" = "「ファイルとして保存」側に使っていたキーを「クリップボードにコピー」側へ付け替えると、普段と同じキーのままスクリーンショットを撮れます。";
 "setup.destination-instructions" = "画像の既定の保存先は ~/Pictures/Snapspool/ です。設定画面から別のフォルダへ変更できます。";
+"setup.manual-settings-path" = "システム設定が開かない場合は、システム設定 > キーボード > キーボードショートカット > スクリーンショット の順に開いてください。";
+"setup.open-settings" = "キーボードショートカットを開く…";
 "setup.done" = "完了";
 
 "notification.destination-save-failed" = "画像を保存先へ書き込めなかったため、履歴用の退避領域に保存しました。";
