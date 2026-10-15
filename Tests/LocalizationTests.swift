@@ -23,6 +23,20 @@ final class LocalizationTests: XCTestCase {
             "This shortcut cannot be registered. The previous setting will be used.",
             "このショートカットは登録できません。以前の設定を使用します。"
         ),
+        "setup.title": ("Set Up Screenshots", "スクリーンショットの設定"),
+        "setup.introduction": (
+            "To use screenshots with Snapspool, enable a macOS screenshot shortcut that copies screenshots to the clipboard.",
+            "スクリーンショットをSnapspoolで扱うには、macOSの「スクリーンショットをクリップボードにコピー」のショートカットを有効にしてください。"
+        ),
+        "setup.shortcut-instructions": (
+            "You can move the key combination you already use from “Save picture of selected area as a file” to “Copy picture of selected area to the clipboard” and keep taking screenshots with the same keys.",
+            "「ファイルとして保存」側に使っていたキーを「クリップボードにコピー」側へ付け替えると、普段と同じキーのままスクリーンショットを撮れます。"
+        ),
+        "setup.destination-instructions": (
+            "Images are saved to ~/Pictures/Snapspool/ by default. You can choose a different folder in Settings.",
+            "画像の既定の保存先は ~/Pictures/Snapspool/ です。設定画面から別のフォルダへ変更できます。"
+        ),
+        "setup.done": ("Done", "完了"),
         "notification.destination-save-failed": (
             "The image could not be written to the destination, so it was saved in temporary history storage.",
             "画像を保存先へ書き込めなかったため、履歴用の退避領域に保存しました。"

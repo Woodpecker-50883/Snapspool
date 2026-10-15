@@ -12,6 +12,7 @@ public final class SnapspoolRuntime {
     private let historyPickerController: HistoryPickerController
     private let globalHotKeyController: GlobalHotKeyController
     private let settingsWindowController: SettingsWindowController
+    private let firstLaunchSetupController: FirstLaunchSetupController
     let statusItemController: MenuBarStatusItemController
     public let settings: AppSettings
     public let monitoringState: MonitoringState
@@ -45,6 +46,7 @@ public final class SnapspoolRuntime {
         self.clipboardMonitor = clipboardMonitor
         historyPickerController = pickerController
         self.settingsWindowController = settingsWindowController
+        firstLaunchSetupController = FirstLaunchSetupController()
         globalHotKeyController = GlobalHotKeyController(
             configuredShortcut: settings.shortcut,
             showHistoryPicker: { pickerController.show() }
@@ -69,6 +71,12 @@ public final class SnapspoolRuntime {
     public func start() {
         clipboardMonitor.start()
         globalHotKeyController.start()
+        presentFirstLaunchSetupIfNeeded()
+    }
+
+    @discardableResult
+    func presentFirstLaunchSetupIfNeeded() -> Bool {
+        firstLaunchSetupController.showIfNeeded()
     }
 
     public func makeMenu() -> NSMenu {
