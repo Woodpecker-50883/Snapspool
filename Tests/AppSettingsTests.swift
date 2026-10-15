@@ -125,6 +125,41 @@ final class AppSettingsTests: XCTestCase {
         )
     }
 
+    func testPicturesContainmentResolvesSymlinkPointingInsidePictures() throws {
+        let resourceAccess = SettingsSecurityScopedResourceAccess()
+        let pictures = temporaryDirectory.appendingPathComponent("Pictures", isDirectory: true)
+        let destination = pictures.appendingPathComponent("Destination", isDirectory: true)
+        let link = temporaryDirectory.appendingPathComponent("linked-destination", isDirectory: true)
+        try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: destination)
+        let settings = AppSettings(
+            defaults: defaults,
+            resourceAccess: resourceAccess,
+            picturesDirectory: pictures
+        )
+
+        XCTAssertTrue(settings.setDestinationURL(link))
+        XCTAssertTrue(resourceAccess.bookmarkedURLs.isEmpty)
+    }
+
+    func testPicturesContainmentRejectsSymlinkPointingOutsidePictures() throws {
+        let resourceAccess = SettingsSecurityScopedResourceAccess()
+        let pictures = temporaryDirectory.appendingPathComponent("Pictures", isDirectory: true)
+        let outside = temporaryDirectory.appendingPathComponent("Outside", isDirectory: true)
+        let link = pictures.appendingPathComponent("apparent-destination", isDirectory: true)
+        try FileManager.default.createDirectory(at: pictures, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: outside)
+        let settings = AppSettings(
+            defaults: defaults,
+            resourceAccess: resourceAccess,
+            picturesDirectory: pictures
+        )
+
+        XCTAssertTrue(settings.setDestinationURL(link))
+        XCTAssertEqual(resourceAccess.bookmarkedURLs, [link.standardizedFileURL])
+    }
+
     func testOldDestinationAccessEndsOnlyAfterItsLastHistoryEntryIsRemoved() async throws {
         let resourceAccess = SettingsSecurityScopedResourceAccess()
         let oldDestination = temporaryDirectory.appendingPathComponent("old", isDirectory: true)

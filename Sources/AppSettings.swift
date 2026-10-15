@@ -154,6 +154,7 @@ public final class AppSettings: ObservableObject {
 
     private let defaults: UserDefaults
     private let resourceAccess: any SecurityScopedResourceAccess
+    private let picturesDirectory: URL
     private var historyStore: HistoryStore?
     private var hotKeyController: GlobalHotKeyController?
     private var imageDestination: MutableImageDestination?
@@ -161,10 +162,13 @@ public final class AppSettings: ObservableObject {
 
     init(
         defaults: UserDefaults = .standard,
-        resourceAccess: any SecurityScopedResourceAccess = SystemSecurityScopedResourceAccess()
+        resourceAccess: any SecurityScopedResourceAccess = SystemSecurityScopedResourceAccess(),
+        picturesDirectory: URL = ImageFolderSaver.defaultDestinationDirectory()
+            .deletingLastPathComponent()
     ) {
         self.defaults = defaults
         self.resourceAccess = resourceAccess
+        self.picturesDirectory = picturesDirectory
         destinationAccessLease = nil
 
         if let bookmark = defaults.data(forKey: Key.destinationBookmark),
@@ -180,7 +184,10 @@ public final class AppSettings: ObservableObject {
             }
         } else if let path = defaults.string(forKey: Key.destinationPath),
                   !path.isEmpty,
-                  Self.isInsidePictures(URL(fileURLWithPath: path, isDirectory: true)) {
+                  Self.isInsidePictures(
+                      URL(fileURLWithPath: path, isDirectory: true),
+                      picturesDirectory: picturesDirectory
+                  ) {
             destinationURL = URL(fileURLWithPath: path, isDirectory: true)
             defaults.removeObject(forKey: Key.destinationBookmark)
         } else {
@@ -240,7 +247,10 @@ public final class AppSettings: ObservableObject {
         let bookmark: Data?
         let newLease: SecurityScopedAccessLease?
 
-        if Self.isInsidePictures(standardizedURL) {
+        if Self.isInsidePictures(
+            standardizedURL,
+            picturesDirectory: picturesDirectory
+        ) {
             bookmark = nil
             newLease = nil
         } else {
@@ -295,11 +305,18 @@ public final class AppSettings: ObservableObject {
             HistoryStore.allowedLimitRange.upperBound)
     }
 
-    private static func isInsidePictures(_ url: URL) -> Bool {
-        let pictures = ImageFolderSaver.defaultDestinationDirectory()
-            .deletingLastPathComponent()
-            .standardizedFileURL.pathComponents
-        let candidate = url.standardizedFileURL.pathComponents
+    private static func isInsidePictures(
+        _ url: URL,
+        picturesDirectory: URL
+    ) -> Bool {
+        let pictures = picturesDirectory
+            .resolvingSymlinksInPath()
+            .standardizedFileURL
+            .pathComponents
+        let candidate = url
+            .resolvingSymlinksInPath()
+            .standardizedFileURL
+            .pathComponents
         return candidate.count >= pictures.count
             && Array(candidate.prefix(pictures.count)) == pictures
     }
