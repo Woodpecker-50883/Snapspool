@@ -2,6 +2,7 @@
 "menu.pause-monitoring" = "Pause Monitoring";
 "menu.resume-monitoring" = "Resume Monitoring";
 "menu.settings" = "Settings";
+"menu.setup-guide" = "Screenshot Setup Guide…";
 "menu.quit" = "Quit";
 "menu.shortcut-warning" = "⚠︎ Unable to Register Shortcut";
 

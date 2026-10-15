@@ -2,6 +2,7 @@
 "menu.pause-monitoring" = "監視の一時停止";
 "menu.resume-monitoring" = "監視を再開";
 "menu.settings" = "設定";
+"menu.setup-guide" = "スクリーンショットの設定…";
 "menu.quit" = "終了";
 "menu.shortcut-warning" = "⚠︎ ショートカットを登録できません";
 

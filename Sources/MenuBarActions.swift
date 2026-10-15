@@ -46,7 +46,8 @@ public final class SnapspoolRuntime {
         self.clipboardMonitor = clipboardMonitor
         historyPickerController = pickerController
         self.settingsWindowController = settingsWindowController
-        firstLaunchSetupController = FirstLaunchSetupController()
+        let firstLaunchSetupController = FirstLaunchSetupController()
+        self.firstLaunchSetupController = firstLaunchSetupController
         globalHotKeyController = GlobalHotKeyController(
             configuredShortcut: settings.shortcut,
             showHistoryPicker: { pickerController.show() }
@@ -62,7 +63,8 @@ public final class SnapspoolRuntime {
             hasHotKeyRegistrationWarning: { [globalHotKeyController] in
                 globalHotKeyController.hasRegistrationWarning
             },
-            showSettings: { settingsWindowController.show() }
+            showSettings: { settingsWindowController.show() },
+            showSetupGuide: { firstLaunchSetupController.show() }
         )
         self.menuActions = menuActions
         statusItemController = MenuBarStatusItemController(menu: menuActions.makeMenu())
@@ -148,6 +150,7 @@ final class MenuBarActions: NSObject {
     private let terminateApplication: () -> Void
     private let hasHotKeyRegistrationWarning: () -> Bool
     private let showSettings: () -> Void
+    private let showSetupGuide: () -> Void
     private let localize: (String) -> String
 
     init(
@@ -161,6 +164,7 @@ final class MenuBarActions: NSObject {
                 from: nil
             )
         },
+        showSetupGuide: @escaping () -> Void = {},
         localize: @escaping (String) -> String = { L10n.string($0) },
         terminateApplication: @escaping () -> Void = { NSApplication.shared.terminate(nil) }
     ) {
@@ -168,6 +172,7 @@ final class MenuBarActions: NSObject {
         self.showHistoryPicker = showHistoryPicker
         self.hasHotKeyRegistrationWarning = hasHotKeyRegistrationWarning
         self.showSettings = showSettings
+        self.showSetupGuide = showSetupGuide
         self.localize = localize
         self.terminateApplication = terminateApplication
     }
@@ -194,6 +199,7 @@ final class MenuBarActions: NSObject {
         }
         menu.addItem(makeItem(title: monitoringMenuTitle, action: #selector(pauseMonitoring(_:))))
         menu.addItem(makeItem(title: localize("menu.settings"), action: #selector(openSettings(_:))))
+        menu.addItem(makeItem(title: localize("menu.setup-guide"), action: #selector(openSetupGuide(_:))))
         menu.addItem(.separator())
         menu.addItem(makeItem(title: localize("menu.quit"), action: #selector(quit(_:))))
         return menu
@@ -210,6 +216,10 @@ final class MenuBarActions: NSObject {
 
     @objc func openSettings(_ sender: Any? = nil) {
         showSettings()
+    }
+
+    @objc func openSetupGuide(_ sender: Any? = nil) {
+        showSetupGuide()
     }
 
     @objc func quit(_ sender: Any? = nil) {

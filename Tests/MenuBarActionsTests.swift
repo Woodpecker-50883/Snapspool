@@ -27,6 +27,7 @@ final class MenuBarActionsTests: XCTestCase {
             L10n.string("menu.history"),
             L10n.string("menu.pause-monitoring"),
             L10n.string("menu.settings"),
+            L10n.string("menu.setup-guide"),
             "",
             L10n.string("menu.quit"),
         ])
@@ -47,6 +48,7 @@ final class MenuBarActionsTests: XCTestCase {
             L10n.string("menu.history"),
             L10n.string("menu.pause-monitoring"),
             L10n.string("menu.settings"),
+            L10n.string("menu.setup-guide"),
             "",
             L10n.string("menu.quit"),
         ])
@@ -64,10 +66,11 @@ final class MenuBarActionsTests: XCTestCase {
             L10n.string("menu.history"),
             L10n.string("menu.pause-monitoring"),
             L10n.string("menu.settings"),
+            L10n.string("menu.setup-guide"),
             "",
             L10n.string("menu.quit"),
         ])
-        XCTAssertEqual(menu.items.map(\.isSeparatorItem), [false, false, false, true, false])
+        XCTAssertEqual(menu.items.map(\.isSeparatorItem), [false, false, false, false, true, false])
     }
 
     func testLaunchedAppCreatesMenuBarLayerWindowAndRemainsAccessoryApp() throws {
@@ -140,6 +143,20 @@ final class MenuBarActionsTests: XCTestCase {
         XCTAssertEqual(settingsOpenCount, 1)
     }
 
+    func testBuiltMenuDispatchesSetupGuideAction() throws {
+        var setupGuideOpenCount = 0
+        let actions = MenuBarActions(
+            clipboardMonitor: ClipboardMonitor(pasteboard: FakeMenuPasteboard()) { _ in },
+            showSetupGuide: { setupGuideOpenCount += 1 }
+        )
+        let setupGuideItem = try XCTUnwrap(actions.makeMenu().item(at: 3))
+
+        XCTAssertEqual(setupGuideItem.title, L10n.string("menu.setup-guide"))
+        activate(setupGuideItem)
+
+        XCTAssertEqual(setupGuideOpenCount, 1)
+    }
+
     func testRegistrationWarningIsShownWithoutDisablingHistoryMenu() throws {
         var historyOpenCount = 0
         let actions = MenuBarActions(
@@ -157,6 +174,7 @@ final class MenuBarActionsTests: XCTestCase {
                 L10n.string("menu.shortcut-warning"),
                 L10n.string("menu.pause-monitoring"),
                 L10n.string("menu.settings"),
+                L10n.string("menu.setup-guide"),
                 "",
                 L10n.string("menu.quit"),
             ]
@@ -206,7 +224,7 @@ final class MenuBarActionsTests: XCTestCase {
             clipboardMonitor: ClipboardMonitor(pasteboard: FakeMenuPasteboard()) { _ in },
             terminateApplication: { terminationCount += 1 }
         )
-        let quitItem = try XCTUnwrap(actions.makeMenu().item(at: 4))
+        let quitItem = try XCTUnwrap(actions.makeMenu().item(at: 5))
 
         XCTAssertEqual(terminationCount, 0)
 

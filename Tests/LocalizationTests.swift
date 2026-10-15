@@ -8,6 +8,7 @@ final class LocalizationTests: XCTestCase {
         "menu.pause-monitoring": ("Pause Monitoring", "監視の一時停止"),
         "menu.resume-monitoring": ("Resume Monitoring", "監視を再開"),
         "menu.settings": ("Settings", "設定"),
+        "menu.setup-guide": ("Screenshot Setup Guide…", "スクリーンショットの設定…"),
         "menu.quit": ("Quit", "終了"),
         "menu.shortcut-warning": ("⚠︎ Unable to Register Shortcut", "⚠︎ ショートカットを登録できません"),
         "history.empty": ("No History", "履歴がありません"),
