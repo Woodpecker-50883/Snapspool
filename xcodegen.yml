@@ -41,6 +41,7 @@ targets:
           - SnapspoolApp.swift
     settings:
       base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.snapspool.SnapspoolFramework
         PRODUCT_NAME: Snapspool
         PRODUCT_MODULE_NAME: Snapspool
         GENERATE_INFOPLIST_FILE: YES

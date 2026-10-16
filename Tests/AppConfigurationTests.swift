@@ -72,6 +72,24 @@ final class BuildArtifactConfigurationTests: XCTestCase {
         }
     }
 
+    func testEmbeddedFrameworkHasAUniqueBundleIdentifier() throws {
+        let appURL = try builtAppURL()
+        let appInfo = try infoDictionary(
+            at: appURL.appendingPathComponent("Contents/Info.plist")
+        )
+        let frameworkURL = appURL.appendingPathComponent(
+            "Contents/Frameworks/Snapspool.framework/Resources/Info.plist"
+        )
+        let frameworkInfo = try infoDictionary(at: frameworkURL)
+
+        let appIdentifier = try XCTUnwrap(appInfo["CFBundleIdentifier"] as? String)
+        let frameworkIdentifier = try XCTUnwrap(frameworkInfo["CFBundleIdentifier"] as? String)
+
+        XCTAssertEqual(frameworkIdentifier, "app.snapspool.SnapspoolFramework")
+        XCTAssertNotEqual(frameworkIdentifier, appIdentifier)
+        XCTAssertEqual(frameworkInfo["CFBundlePackageType"] as? String, "FMWK")
+    }
+
     func testBuiltExecutableRequiresMacOS15() throws {
         let executableURL = try builtAppURL()
             .appendingPathComponent("Contents/MacOS/Snapspool")
@@ -148,6 +166,12 @@ final class BuildArtifactConfigurationTests: XCTestCase {
             nil,
             "Could not locate the built Snapspool.app next to the test bundle at \(Bundle(for: Self.self).bundleURL.path)"
         )
+    }
+
+    private func infoDictionary(at url: URL) throws -> [String: Any] {
+        let data = try Data(contentsOf: url)
+        let propertyList = try PropertyListSerialization.propertyList(from: data, format: nil)
+        return try XCTUnwrap(propertyList as? [String: Any])
     }
 
     private func runGit(_ arguments: [String]) throws -> CommandResult {
