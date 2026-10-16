@@ -358,14 +358,23 @@ private final class HistoryPickerPanel: NSPanel {
 @MainActor
 final class HistoryPickerController: NSObject, NSWindowDelegate {
     private let historyStore: HistoryStore
-    private let restorer: ClipboardRestorer
+    private let selectionHandler: HistorySelectionHandler
     private let model: HistoryPickerModel
     private let panel: HistoryPickerPanel
     private var isDismissing = false
 
-    init(historyStore: HistoryStore, restorer: ClipboardRestorer = ClipboardRestorer()) {
+    init(
+        historyStore: HistoryStore,
+        settings: AppSettings = AppSettings(),
+        restorer: ClipboardRestorer = ClipboardRestorer(),
+        autoPasteController: AutoPasteController = AutoPasteController()
+    ) {
         self.historyStore = historyStore
-        self.restorer = restorer
+        selectionHandler = HistorySelectionHandler(
+            restorer: restorer,
+            autoPasteController: autoPasteController,
+            isAutoPasteEnabled: { [weak settings] in settings?.autoPasteEnabled ?? false }
+        )
         model = HistoryPickerModel()
         panel = HistoryPickerPanel(
             contentRect: NSRect(
@@ -392,9 +401,8 @@ final class HistoryPickerController: NSObject, NSWindowDelegate {
             case .cancel: model?.cancel()
             }
         }
-        model.onConfirm = { [weak restorer] entry in
-            guard let restorer else { return }
-            try restorer.restore(entry)
+        model.onConfirm = { [weak selectionHandler] entry in
+            try selectionHandler?.confirm(entry)
         }
         model.onDismiss = { [weak self] in
             self?.dismiss()

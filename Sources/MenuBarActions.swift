@@ -49,7 +49,7 @@ public final class SnapspoolRuntime {
             textLimit: settings.textLimit,
             imageIngestionService: imageService
         )
-        let pickerController = HistoryPickerController(historyStore: historyStore)
+        let pickerController = HistoryPickerController(historyStore: historyStore, settings: settings)
         let settingsWindowController = SettingsWindowController(settings: settings)
         let monitoringState = MonitoringState()
         let clipboardMonitor = ClipboardMonitor(

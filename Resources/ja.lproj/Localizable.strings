@@ -17,12 +17,16 @@
 "settings.image-history-count" = "画像の履歴件数: %lld";
 "settings.text-history-count" = "テキストの履歴件数: %lld";
 "settings.shortcut" = "ショートカット";
+"settings.auto-paste" = "履歴の選択後に自動で貼り付ける";
 "settings.shortcut-recording" = "ショートカットを入力";
 "settings.shortcut-error-title" = "ショートカットを変更できません";
 "settings.shortcut-error-message" = "このショートカットは登録できません。以前の設定を使用します。";
 "settings.shortcut-modifier-required" = "ショートカットには修飾キーが1つ以上必要です。";
 "settings.shortcut-shift-option-unsupported" = "このバージョンのmacOSでは、ShiftとOptionだけのグローバルショートカットは使用できません。ControlまたはCommandを追加してください。";
 "common.ok" = "OK";
+
+"autopaste.permission-required-title" = "自動貼り付けを利用できません";
+"autopaste.permission-required-message" = "クリップボードに戻したので Cmd+V で貼り付けてください。";
 
 "setup.title" = "スクリーンショットの設定";
 "setup.introduction" = "スクリーンショットをSnapspoolで扱うには、macOSの「スクリーンショットをクリップボードにコピー」のショートカットを有効にしてください。";

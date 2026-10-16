@@ -27,6 +27,10 @@ final class LocalizationTests: XCTestCase {
         "settings.image-history-count": ("Image History: %lld", "画像の履歴件数: %lld"),
         "settings.text-history-count": ("Text History: %lld", "テキストの履歴件数: %lld"),
         "settings.shortcut": ("Shortcut", "ショートカット"),
+        "settings.auto-paste": (
+            "Paste automatically after selecting history",
+            "履歴の選択後に自動で貼り付ける"
+        ),
         "settings.shortcut-recording": ("Type Shortcut", "ショートカットを入力"),
         "settings.shortcut-error-title": ("Unable to Change Shortcut", "ショートカットを変更できません"),
         "settings.shortcut-error-message": (
@@ -67,6 +71,14 @@ final class LocalizationTests: XCTestCase {
         "notification.fallback-save-failed": (
             "The image could not be saved and was not added to history.",
             "画像を保存できなかったため、履歴には追加されませんでした。"
+        ),
+        "autopaste.permission-required-title": (
+            "Automatic Paste Unavailable",
+            "自動貼り付けを利用できません"
+        ),
+        "autopaste.permission-required-message": (
+            "The item was restored to the clipboard. Press Cmd+V to paste it.",
+            "クリップボードに戻したので Cmd+V で貼り付けてください。"
         ),
         "common.ok": ("OK", "OK"),
     ]

@@ -150,6 +150,7 @@ public final class AppSettings: ObservableObject {
     @Published public private(set) var imageLimit: Int
     @Published public private(set) var textLimit: Int
     @Published private(set) var shortcut: GlobalShortcut
+    @Published public private(set) var autoPasteEnabled: Bool
     @Published public var shortcutErrorMessage: String?
 
     private let defaults: UserDefaults
@@ -201,6 +202,7 @@ public final class AppSettings: ObservableObject {
             ?? HistoryStore.defaultTextLimit
         imageLimit = Self.clampedLimit(storedImageLimit)
         textLimit = Self.clampedLimit(storedTextLimit)
+        autoPasteEnabled = true
 
         if defaults.object(forKey: Key.shortcutKeyCode) != nil,
            defaults.object(forKey: Key.shortcutModifiers) != nil {
@@ -239,6 +241,10 @@ public final class AppSettings: ObservableObject {
         textLimit = value
         defaults.set(value, forKey: Key.textLimit)
         historyStore?.setTextLimit(value)
+    }
+
+    public func setAutoPasteEnabled(_ isEnabled: Bool) {
+        autoPasteEnabled = isEnabled
     }
 
     @discardableResult
@@ -362,9 +368,10 @@ public struct AppSettingsView: View {
                 ShortcutRecorderView(settings: settings)
                     .frame(width: 150, height: 28)
             }
+            Toggle(L10n.string("settings.auto-paste"), isOn: autoPasteBinding)
         }
         .formStyle(.grouped)
-        .frame(width: 520, height: 260)
+        .frame(width: 520, height: 300)
         .alert(
             L10n.string("settings.shortcut-error-title"),
             isPresented: Binding(
@@ -389,6 +396,13 @@ public struct AppSettingsView: View {
         Binding(
             get: { settings.textLimit },
             set: { value in settings.setTextLimit(value) }
+        )
+    }
+
+    private var autoPasteBinding: Binding<Bool> {
+        Binding(
+            get: { settings.autoPasteEnabled },
+            set: { value in settings.setAutoPasteEnabled(value) }
         )
     }
 

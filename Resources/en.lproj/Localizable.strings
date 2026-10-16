@@ -17,12 +17,16 @@
 "settings.image-history-count" = "Image History: %lld";
 "settings.text-history-count" = "Text History: %lld";
 "settings.shortcut" = "Shortcut";
+"settings.auto-paste" = "Paste automatically after selecting history";
 "settings.shortcut-recording" = "Type Shortcut";
 "settings.shortcut-error-title" = "Unable to Change Shortcut";
 "settings.shortcut-error-message" = "This shortcut cannot be registered. The previous setting will be used.";
 "settings.shortcut-modifier-required" = "A shortcut must include at least one modifier key.";
 "settings.shortcut-shift-option-unsupported" = "On this version of macOS, Shift and Option alone cannot be used for a global shortcut. Add Control or Command.";
 "common.ok" = "OK";
+
+"autopaste.permission-required-title" = "Automatic Paste Unavailable";
+"autopaste.permission-required-message" = "The item was restored to the clipboard. Press Cmd+V to paste it.";
 
 "setup.title" = "Set Up Screenshots";
 "setup.introduction" = "To use screenshots with Snapspool, enable a macOS screenshot shortcut that copies screenshots to the clipboard.";
