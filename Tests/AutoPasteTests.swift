@@ -37,21 +37,48 @@ final class AutoPasteTests: XCTestCase {
         XCTAssertEqual(log.calls, ["authorize", "notify"])
     }
 
+    func testSystemTargetProviderRejectsSnapspoolItself() {
+        let log = AutoPasteCallLog()
+        let application = LoggedTargetApplication(
+            name: "Snapspool",
+            processIdentifier: 42,
+            log: log
+        )
+        let provider = SystemPasteTargetApplicationProvider(
+            frontmostApplication: { application },
+            currentProcessIdentifier: { 42 }
+        )
+
+        XCTAssertNil(provider.frontmostApplication())
+    }
+
     func testAuthorizedAutoPasteSendsCommandVWithoutFallbackNotice() {
         let log = AutoPasteCallLog()
         let controller = makeController(log: log, isAuthorized: true)
 
+        controller.captureTargetApplication()
         controller.pasteIfEnabled(true)
 
-        XCTAssertEqual(log.calls, ["authorize", "send"])
+        XCTAssertEqual(log.calls, ["authorize", "activate:target", "send"])
     }
 
-    func testHistorySelectionRestoresClipboardBeforeSendingPaste() throws {
+    func testHistorySelectionRestoresClipboardThenReactivatesCapturedApplicationBeforeSendingPaste() throws {
         let log = AutoPasteCallLog()
         let pasteboard = LoggedPasteboard(log: log)
+        let originalTarget = LoggedTargetApplication(name: "original", log: log)
+        let laterFrontmostApplication = LoggedTargetApplication(name: "later", log: log)
+        let provider = LoggedTargetApplicationProvider(
+            application: originalTarget,
+            onCapture: { log.calls.append("capture:original") }
+        )
+        let autoPasteController = makeController(
+            log: log,
+            isAuthorized: true,
+            targetApplicationProvider: provider
+        )
         let handler = HistorySelectionHandler(
             restorer: ClipboardRestorer(pasteboard: pasteboard),
-            autoPasteController: makeController(log: log, isAuthorized: true),
+            autoPasteController: autoPasteController,
             isAutoPasteEnabled: { true }
         )
         let entry = HistoryEntry(
@@ -59,9 +86,14 @@ final class AutoPasteTests: XCTestCase {
             detectionOrder: 0
         )
 
+        autoPasteController.captureTargetApplication()
+        provider.application = laterFrontmostApplication
         try handler.confirm(entry)
 
-        XCTAssertEqual(log.calls, ["restore", "authorize", "send"])
+        XCTAssertEqual(
+            log.calls,
+            ["capture:original", "restore", "authorize", "activate:original", "send"]
+        )
         XCTAssertEqual(
             pasteboard.dataByType[ClipboardContentSelector.plainTextType],
             Data("chosen history".utf8)
@@ -100,12 +132,17 @@ final class AutoPasteTests: XCTestCase {
 
     private func makeController(
         log: AutoPasteCallLog,
-        isAuthorized: Bool
+        isAuthorized: Bool,
+        targetApplicationProvider: (any PasteTargetApplicationProviding)? = nil
     ) -> AutoPasteController {
         AutoPasteController(
             authorization: LoggedAuthorization(log: log, result: isAuthorized),
             eventSender: LoggedEventSender(log: log),
-            notifier: LoggedAutoPasteNotifier(log: log)
+            notifier: LoggedAutoPasteNotifier(log: log),
+            targetApplicationProvider: targetApplicationProvider
+                ?? LoggedTargetApplicationProvider(
+                    application: LoggedTargetApplication(name: "target", log: log)
+                )
         )
     }
 }
@@ -142,6 +179,40 @@ private struct LoggedAutoPasteNotifier: AutoPasteNotifying {
 
     func notifyManualPasteRequired() {
         log.calls.append("notify")
+    }
+}
+
+@MainActor
+private final class LoggedTargetApplication: PasteTargetApplication {
+    let processIdentifier: pid_t
+    private let name: String
+    private let log: AutoPasteCallLog
+
+    init(name: String, processIdentifier: pid_t = 12_345, log: AutoPasteCallLog) {
+        self.name = name
+        self.processIdentifier = processIdentifier
+        self.log = log
+    }
+
+    func activateForPaste() -> Bool {
+        log.calls.append("activate:\(name)")
+        return true
+    }
+}
+
+@MainActor
+private final class LoggedTargetApplicationProvider: PasteTargetApplicationProviding {
+    var application: (any PasteTargetApplication)?
+    private let onCapture: () -> Void
+
+    init(application: (any PasteTargetApplication)?, onCapture: @escaping () -> Void = {}) {
+        self.application = application
+        self.onCapture = onCapture
+    }
+
+    func frontmostApplication() -> (any PasteTargetApplication)? {
+        onCapture()
+        return application
     }
 }
 

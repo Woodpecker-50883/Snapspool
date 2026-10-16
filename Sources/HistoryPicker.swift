@@ -358,6 +358,7 @@ private final class HistoryPickerPanel: NSPanel {
 @MainActor
 final class HistoryPickerController: NSObject, NSWindowDelegate {
     private let historyStore: HistoryStore
+    private let autoPasteController: AutoPasteController
     private let selectionHandler: HistorySelectionHandler
     private let model: HistoryPickerModel
     private let panel: HistoryPickerPanel
@@ -370,6 +371,7 @@ final class HistoryPickerController: NSObject, NSWindowDelegate {
         autoPasteController: AutoPasteController = AutoPasteController()
     ) {
         self.historyStore = historyStore
+        self.autoPasteController = autoPasteController
         selectionHandler = HistorySelectionHandler(
             restorer: restorer,
             autoPasteController: autoPasteController,
@@ -413,6 +415,7 @@ final class HistoryPickerController: NSObject, NSWindowDelegate {
         model.replaceEntries(historyStore.entries)
         panel.setContentSize(HistoryPickerLayout.contentSize(for: model))
         panel.center()
+        autoPasteController.captureTargetApplication()
         panel.orderFrontRegardless()
         panel.makeKey()
     }

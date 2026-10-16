@@ -20,6 +20,50 @@ protocol PasteEventSending {
 }
 
 @MainActor
+protocol PasteTargetApplication: AnyObject {
+    var processIdentifier: pid_t { get }
+    func activateForPaste() -> Bool
+}
+
+@MainActor
+extension NSRunningApplication: PasteTargetApplication {
+    func activateForPaste() -> Bool {
+        activate(options: [.activateAllWindows])
+    }
+}
+
+@MainActor
+protocol PasteTargetApplicationProviding {
+    func frontmostApplication() -> (any PasteTargetApplication)?
+}
+
+@MainActor
+struct SystemPasteTargetApplicationProvider: PasteTargetApplicationProviding {
+    private let frontmostApplicationLookup: () -> (any PasteTargetApplication)?
+    private let currentProcessIdentifier: () -> pid_t
+
+    init(
+        frontmostApplication: @escaping () -> (any PasteTargetApplication)? = {
+            NSWorkspace.shared.frontmostApplication
+        },
+        currentProcessIdentifier: @escaping () -> pid_t = {
+            NSRunningApplication.current.processIdentifier
+        }
+    ) {
+        frontmostApplicationLookup = frontmostApplication
+        self.currentProcessIdentifier = currentProcessIdentifier
+    }
+
+    func frontmostApplication() -> (any PasteTargetApplication)? {
+        guard let application = frontmostApplicationLookup(),
+              application.processIdentifier != currentProcessIdentifier() else {
+            return nil
+        }
+        return application
+    }
+}
+
+@MainActor
 struct SystemPasteEventSender: PasteEventSending {
     private let postEvent: (CGEvent) -> Void
 
@@ -72,20 +116,35 @@ final class AutoPasteController {
     private let authorization: any PasteEventAuthorizing
     private let eventSender: any PasteEventSending
     private let notifier: any AutoPasteNotifying
+    private let targetApplicationProvider: any PasteTargetApplicationProviding
+    private var targetApplication: (any PasteTargetApplication)?
 
     init(
         authorization: any PasteEventAuthorizing = SystemPasteEventAuthorization(),
         eventSender: any PasteEventSending = SystemPasteEventSender(),
-        notifier: any AutoPasteNotifying = SystemAutoPasteNotifier()
+        notifier: any AutoPasteNotifying = SystemAutoPasteNotifier(),
+        targetApplicationProvider: any PasteTargetApplicationProviding = SystemPasteTargetApplicationProvider()
     ) {
         self.authorization = authorization
         self.eventSender = eventSender
         self.notifier = notifier
+        self.targetApplicationProvider = targetApplicationProvider
+    }
+
+    func captureTargetApplication() {
+        targetApplication = targetApplicationProvider.frontmostApplication()
     }
 
     func pasteIfEnabled(_ isEnabled: Bool) {
-        guard isEnabled else { return }
-        guard authorization.requestAccess(), eventSender.sendPasteShortcut() else {
+        guard isEnabled else {
+            targetApplication = nil
+            return
+        }
+        defer { targetApplication = nil }
+        guard authorization.requestAccess(),
+              let targetApplication,
+              targetApplication.activateForPaste(),
+              eventSender.sendPasteShortcut() else {
             notifier.notifyManualPasteRequired()
             return
         }

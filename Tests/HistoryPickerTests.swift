@@ -225,6 +225,34 @@ final class HistoryPickerTests: XCTestCase {
         )
     }
 
+    func testControllerCapturesPasteTargetImmediatelyBeforeShowingPicker() {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let store = HistoryStore(imageIngestionService: ImageIngestionService(
+            destinationSaver: ImageFolderSaver(
+                destinationDirectory: temporaryDirectory.appendingPathComponent("destination")
+            ),
+            fallbackSaver: ImageFolderSaver(
+                destinationDirectory: temporaryDirectory.appendingPathComponent("fallback")
+            ),
+            notifier: HistoryPickerSilentNotifier()
+        ))
+        let targetProvider = HistoryPickerTargetProvider()
+        let autoPasteController = AutoPasteController(
+            targetApplicationProvider: targetProvider
+        )
+        let controller = HistoryPickerController(
+            historyStore: store,
+            autoPasteController: autoPasteController
+        )
+
+        XCTAssertEqual(targetProvider.captureCount, 0)
+        controller.show()
+        defer { controller.dismiss() }
+
+        XCTAssertEqual(targetProvider.captureCount, 1)
+    }
+
     func testImageThumbnailLongestEdgeIsAtMost256Pixels() throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -283,5 +311,15 @@ private final class HistoryPickerWritablePasteboard: ClipboardPasteboardWriting 
         replaceCallCount += 1
         dataByType = Dictionary(uniqueKeysWithValues: representations.map { ($0.type, $0.data) })
         return true
+    }
+}
+
+@MainActor
+private final class HistoryPickerTargetProvider: PasteTargetApplicationProviding {
+    private(set) var captureCount = 0
+
+    func frontmostApplication() -> (any PasteTargetApplication)? {
+        captureCount += 1
+        return nil
     }
 }
