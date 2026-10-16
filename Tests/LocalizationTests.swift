@@ -27,12 +27,19 @@ final class LocalizationTests: XCTestCase {
         "settings.image-history-count": ("Image History: %lld", "画像の履歴件数: %lld"),
         "settings.text-history-count": ("Text History: %lld", "テキストの履歴件数: %lld"),
         "settings.shortcut": ("Shortcut", "ショートカット"),
-        "settings.modifier-key": ("Modifier Key", "修飾キー"),
-        "settings.key": ("Key", "キー"),
+        "settings.shortcut-recording": ("Type Shortcut", "ショートカットを入力"),
         "settings.shortcut-error-title": ("Unable to Change Shortcut", "ショートカットを変更できません"),
         "settings.shortcut-error-message": (
             "This shortcut cannot be registered. The previous setting will be used.",
             "このショートカットは登録できません。以前の設定を使用します。"
+        ),
+        "settings.shortcut-modifier-required": (
+            "A shortcut must include at least one modifier key.",
+            "ショートカットには修飾キーが1つ以上必要です。"
+        ),
+        "settings.shortcut-shift-option-unsupported": (
+            "On this version of macOS, Shift and Option alone cannot be used for a global shortcut. Add Control or Command.",
+            "このバージョンのmacOSでは、ShiftとOptionだけのグローバルショートカットは使用できません。ControlまたはCommandを追加してください。"
         ),
         "setup.title": ("Set Up Screenshots", "スクリーンショットの設定"),
         "setup.introduction": (

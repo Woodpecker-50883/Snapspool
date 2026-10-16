@@ -258,6 +258,95 @@ final class AppSettingsTests: XCTestCase {
         XCTAssertNil(settings.shortcutErrorMessage)
     }
 
+    func testRecorderAcceptsSingleControlModifierAndDisplaysSymbols() {
+        let registrar = SettingsHotKeyRegistrar(results: [true])
+        let store = makeHistoryStore()
+        let settings = AppSettings(defaults: defaults)
+        connect(settings, to: store, registrar: registrar)
+        let recorder = makeRecorder(for: settings)
+        let expected = GlobalShortcut(
+            keyCode: UInt32(kVK_ANSI_V),
+            modifiers: UInt32(controlKey)
+        )
+
+        recorder.beginRecording()
+        recorder.handleKeyDown(
+            keyCode: UInt16(kVK_ANSI_V),
+            modifierFlags: .control
+        )
+
+        XCTAssertFalse(recorder.isRecording)
+        XCTAssertEqual(registrar.attempts, [expected])
+        XCTAssertEqual(settings.shortcut, expected)
+        XCTAssertEqual(settings.shortcut.displayString, "⌃V")
+        XCTAssertEqual(AppSettings(defaults: defaults).shortcut, expected)
+    }
+
+    func testRecorderEscapeCancelsWithoutChangingOrRegistering() {
+        let registrar = SettingsHotKeyRegistrar(results: [])
+        let store = makeHistoryStore()
+        let settings = AppSettings(defaults: defaults)
+        connect(settings, to: store, registrar: registrar)
+        let original = settings.shortcut
+        let recorder = makeRecorder(for: settings)
+
+        recorder.beginRecording()
+        recorder.handleKeyDown(
+            keyCode: UInt16(kVK_Escape),
+            modifierFlags: []
+        )
+
+        XCTAssertFalse(recorder.isRecording)
+        XCTAssertEqual(settings.shortcut, original)
+        XCTAssertTrue(registrar.attempts.isEmpty)
+    }
+
+    func testRecorderRejectsShortcutWithoutModifiersBeforeRegistration() {
+        let registrar = SettingsHotKeyRegistrar(results: [])
+        let store = makeHistoryStore()
+        let settings = AppSettings(defaults: defaults)
+        connect(settings, to: store, registrar: registrar)
+        let original = settings.shortcut
+        let recorder = makeRecorder(for: settings)
+
+        recorder.beginRecording()
+        recorder.handleKeyDown(
+            keyCode: UInt16(kVK_ANSI_V),
+            modifierFlags: []
+        )
+
+        XCTAssertEqual(settings.shortcut, original)
+        XCTAssertTrue(registrar.attempts.isEmpty)
+        XCTAssertEqual(
+            settings.shortcutErrorMessage,
+            L10n.string("settings.shortcut-modifier-required")
+        )
+    }
+
+    func testRecorderRejectsShiftOrOptionOnlyShortcutsWithSpecificReason() {
+        for modifierFlags in [NSEvent.ModifierFlags.shift, .option, [.shift, .option]] {
+            let registrar = SettingsHotKeyRegistrar(results: [])
+            let store = makeHistoryStore()
+            let settings = AppSettings(defaults: defaults)
+            connect(settings, to: store, registrar: registrar)
+            let original = settings.shortcut
+            let recorder = makeRecorder(for: settings)
+
+            recorder.beginRecording()
+            recorder.handleKeyDown(
+                keyCode: UInt16(kVK_ANSI_V),
+                modifierFlags: modifierFlags
+            )
+
+            XCTAssertEqual(settings.shortcut, original)
+            XCTAssertTrue(registrar.attempts.isEmpty)
+            XCTAssertEqual(
+                settings.shortcutErrorMessage,
+                L10n.string("settings.shortcut-shift-option-unsupported")
+            )
+        }
+    }
+
     func testFailedShortcutChangeRestoresOldRegistrationAndIsNotPersisted() {
         let registrar = SettingsHotKeyRegistrar(results: [false, true])
         let store = makeHistoryStore()
@@ -268,12 +357,36 @@ final class AppSettingsTests: XCTestCase {
             keyCode: UInt32(kVK_ANSI_X),
             modifiers: UInt32(controlKey | optionKey)
         )
+        let recorder = makeRecorder(for: settings)
 
-        XCTAssertFalse(settings.setShortcut(rejected))
+        recorder.beginRecording()
+        recorder.handleKeyDown(
+            keyCode: UInt16(kVK_ANSI_X),
+            modifierFlags: [.control, .option]
+        )
+
         XCTAssertEqual(registrar.attempts, [rejected, original])
         XCTAssertEqual(settings.shortcut, original)
         XCTAssertEqual(AppSettings(defaults: defaults).shortcut, original)
         XCTAssertNotNil(settings.shortcutErrorMessage)
+    }
+
+    func testRerecordingCurrentShortcutStillChecksCarbonRegistration() {
+        let registrar = SettingsHotKeyRegistrar(results: [true])
+        let store = makeHistoryStore()
+        let settings = AppSettings(defaults: defaults)
+        connect(settings, to: store, registrar: registrar)
+        let recorder = makeRecorder(for: settings)
+
+        recorder.beginRecording()
+        recorder.handleKeyDown(
+            keyCode: UInt16(kVK_ANSI_V),
+            modifierFlags: [.command, .shift]
+        )
+
+        XCTAssertEqual(registrar.attempts, [.defaultShortcut])
+        XCTAssertEqual(settings.shortcut, .defaultShortcut)
+        XCTAssertNil(settings.shortcutErrorMessage)
     }
 
     private func connect(
@@ -290,6 +403,18 @@ final class AppSettingsTests: XCTestCase {
             hotKeyController: controller,
             imageDestination: MutableImageDestination(url: settings.destinationURL)
         )
+    }
+
+    private func makeRecorder(for settings: AppSettings) -> ShortcutRecorderControl {
+        let recorder = ShortcutRecorderControl()
+        recorder.shortcutDisplay = settings.shortcut.displayString
+        recorder.onShortcut = { keyCode, modifierFlags in
+            _ = settings.setShortcut(GlobalShortcut(
+                keyCode: keyCode,
+                modifierFlags: modifierFlags
+            ))
+        }
+        return recorder
     }
 
     private func makeHistoryStore() -> HistoryStore {

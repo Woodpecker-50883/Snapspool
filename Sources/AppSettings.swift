@@ -288,6 +288,15 @@ public final class AppSettings: ObservableObject {
 
     @discardableResult
     func setShortcut(_ candidate: GlobalShortcut) -> Bool {
+        if let validationError = candidate.validationError {
+            switch validationError {
+            case .modifierRequired:
+                shortcutErrorMessage = L10n.string("settings.shortcut-modifier-required")
+            case .unsupportedShiftOptionOnly:
+                shortcutErrorMessage = L10n.string("settings.shortcut-shift-option-unsupported")
+            }
+            return false
+        }
         guard let hotKeyController else { return false }
         guard hotKeyController.updateShortcut(candidate) else {
             shortcutErrorMessage = L10n.string("settings.shortcut-error-message")
@@ -327,35 +336,7 @@ public final class AppSettings: ObservableObject {
 }
 
 public struct AppSettingsView: View {
-    private struct ShortcutChoice: Identifiable {
-        let title: String
-        let value: UInt32
-        var id: UInt32 { value }
-    }
-
     @ObservedObject private var settings: AppSettings
-
-    private static let shortcutKeys: [ShortcutChoice] = [
-        .init(title: "A", value: UInt32(kVK_ANSI_A)), .init(title: "B", value: UInt32(kVK_ANSI_B)),
-        .init(title: "C", value: UInt32(kVK_ANSI_C)), .init(title: "D", value: UInt32(kVK_ANSI_D)),
-        .init(title: "E", value: UInt32(kVK_ANSI_E)), .init(title: "F", value: UInt32(kVK_ANSI_F)),
-        .init(title: "G", value: UInt32(kVK_ANSI_G)), .init(title: "H", value: UInt32(kVK_ANSI_H)),
-        .init(title: "I", value: UInt32(kVK_ANSI_I)), .init(title: "J", value: UInt32(kVK_ANSI_J)),
-        .init(title: "K", value: UInt32(kVK_ANSI_K)), .init(title: "L", value: UInt32(kVK_ANSI_L)),
-        .init(title: "M", value: UInt32(kVK_ANSI_M)), .init(title: "N", value: UInt32(kVK_ANSI_N)),
-        .init(title: "O", value: UInt32(kVK_ANSI_O)), .init(title: "P", value: UInt32(kVK_ANSI_P)),
-        .init(title: "Q", value: UInt32(kVK_ANSI_Q)), .init(title: "R", value: UInt32(kVK_ANSI_R)),
-        .init(title: "S", value: UInt32(kVK_ANSI_S)), .init(title: "T", value: UInt32(kVK_ANSI_T)),
-        .init(title: "U", value: UInt32(kVK_ANSI_U)), .init(title: "V", value: UInt32(kVK_ANSI_V)),
-        .init(title: "W", value: UInt32(kVK_ANSI_W)), .init(title: "X", value: UInt32(kVK_ANSI_X)),
-        .init(title: "Y", value: UInt32(kVK_ANSI_Y)), .init(title: "Z", value: UInt32(kVK_ANSI_Z))
-    ]
-    private static let modifierChoices: [ShortcutChoice] = [
-        .init(title: "⌘⇧", value: UInt32(cmdKey | shiftKey)),
-        .init(title: "⌘⌥", value: UInt32(cmdKey | optionKey)),
-        .init(title: "⌃⇧", value: UInt32(controlKey | shiftKey)),
-        .init(title: "⌃⌥", value: UInt32(controlKey | optionKey))
-    ]
 
     public init(settings: AppSettings) {
         self.settings = settings
@@ -378,20 +359,8 @@ public struct AppSettingsView: View {
                 Text(L10n.formatted("settings.text-history-count", settings.textLimit))
             }
             LabeledContent(L10n.string("settings.shortcut")) {
-                HStack {
-                    Picker(L10n.string("settings.modifier-key"), selection: shortcutModifiersBinding) {
-                        ForEach(Self.modifierChoices) { choice in
-                            Text(choice.title).tag(choice.value)
-                        }
-                    }
-                    .labelsHidden()
-                    Picker(L10n.string("settings.key"), selection: shortcutKeyBinding) {
-                        ForEach(Self.shortcutKeys) { choice in
-                            Text(choice.title).tag(choice.value)
-                        }
-                    }
-                    .labelsHidden()
-                }
+                ShortcutRecorderView(settings: settings)
+                    .frame(width: 150, height: 28)
             }
         }
         .formStyle(.grouped)
@@ -423,26 +392,6 @@ public struct AppSettingsView: View {
         )
     }
 
-    private var shortcutKeyBinding: Binding<UInt32> {
-        Binding(
-            get: { settings.shortcut.keyCode },
-            set: { _ = settings.setShortcut(GlobalShortcut(
-                keyCode: $0,
-                modifiers: settings.shortcut.modifiers
-            )) }
-        )
-    }
-
-    private var shortcutModifiersBinding: Binding<UInt32> {
-        Binding(
-            get: { settings.shortcut.modifiers },
-            set: { _ = settings.setShortcut(GlobalShortcut(
-                keyCode: settings.shortcut.keyCode,
-                modifiers: $0
-            )) }
-        )
-    }
-
     private func chooseDestination() {
         let panel = NSOpenPanel()
         panel.canChooseFiles = false
@@ -451,5 +400,80 @@ public struct AppSettingsView: View {
         panel.directoryURL = settings.destinationURL
         guard panel.runModal() == .OK else { return }
         _ = settings.applyDestinationSelection(panel.url)
+    }
+}
+
+private struct ShortcutRecorderView: NSViewRepresentable {
+    let settings: AppSettings
+
+    func makeNSView(context: Context) -> ShortcutRecorderControl {
+        let control = ShortcutRecorderControl()
+        control.onShortcut = { [weak settings] keyCode, modifierFlags in
+            guard let settings else { return }
+            _ = settings.setShortcut(GlobalShortcut(
+                keyCode: keyCode,
+                modifierFlags: modifierFlags
+            ))
+        }
+        return control
+    }
+
+    func updateNSView(_ control: ShortcutRecorderControl, context: Context) {
+        control.shortcutDisplay = settings.shortcut.displayString
+    }
+}
+
+final class ShortcutRecorderControl: NSButton {
+    var onShortcut: ((UInt16, NSEvent.ModifierFlags) -> Void)?
+    var shortcutDisplay = "" {
+        didSet { if !isRecording { title = shortcutDisplay } }
+    }
+    private(set) var isRecording = false
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        bezelStyle = .rounded
+        setButtonType(.momentaryPushIn)
+        target = self
+        action = #selector(beginRecording)
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        bezelStyle = .rounded
+        setButtonType(.momentaryPushIn)
+        target = self
+        action = #selector(beginRecording)
+    }
+
+    override var acceptsFirstResponder: Bool { true }
+
+    @objc func beginRecording() {
+        isRecording = true
+        title = L10n.string("settings.shortcut-recording")
+        window?.makeFirstResponder(self)
+    }
+
+    override func keyDown(with event: NSEvent) {
+        guard isRecording else {
+            super.keyDown(with: event)
+            return
+        }
+        handleKeyDown(keyCode: event.keyCode, modifierFlags: event.modifierFlags)
+    }
+
+    func handleKeyDown(keyCode: UInt16, modifierFlags: NSEvent.ModifierFlags) {
+        if keyCode == UInt16(kVK_Escape) {
+            finishRecording()
+            return
+        }
+        onShortcut?(keyCode, modifierFlags)
+        finishRecording()
+    }
+
+    private func finishRecording() {
+        isRecording = false
+        title = shortcutDisplay
+        window?.makeFirstResponder(nil)
     }
 }

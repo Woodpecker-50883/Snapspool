@@ -17,10 +17,11 @@
 "settings.image-history-count" = "Image History: %lld";
 "settings.text-history-count" = "Text History: %lld";
 "settings.shortcut" = "Shortcut";
-"settings.modifier-key" = "Modifier Key";
-"settings.key" = "Key";
+"settings.shortcut-recording" = "Type Shortcut";
 "settings.shortcut-error-title" = "Unable to Change Shortcut";
 "settings.shortcut-error-message" = "This shortcut cannot be registered. The previous setting will be used.";
+"settings.shortcut-modifier-required" = "A shortcut must include at least one modifier key.";
+"settings.shortcut-shift-option-unsupported" = "On this version of macOS, Shift and Option alone cannot be used for a global shortcut. Add Control or Command.";
 "common.ok" = "OK";
 
 "setup.title" = "Set Up Screenshots";
