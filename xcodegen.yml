@@ -9,6 +9,8 @@ settings:
   base:
     SWIFT_VERSION: "6.0"
     MACOSX_DEPLOYMENT_TARGET: "15.0"
+    DEVELOPMENT_TEAM: $(SNAPSPOOL_DEVELOPMENT_TEAM)
+    CODE_SIGN_STYLE: Automatic
 
 targets:
   Snapspool:
@@ -54,15 +56,28 @@ targets:
     hostApplication: Snapspool
     sources:
       - path: Tests
+        excludes:
+          - AppConfigurationTests.swift
       - path: Resources
     dependencies:
       - target: SnapspoolTestable
-      - target: Snapspool
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.snapspool.SnapspoolTests
         GENERATE_INFOPLIST_FILE: YES
         TEST_HOST: $(BUILT_PRODUCTS_DIR)/Snapspool.app/Contents/MacOS/Snapspool
+
+  SnapspoolBuildArtifactTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests/AppConfigurationTests.swift
+    dependencies:
+      - target: SnapspoolTestable
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.snapspool.SnapspoolBuildArtifactTests
+        GENERATE_INFOPLIST_FILE: YES
 
 schemes:
   Snapspool:
@@ -73,3 +88,4 @@ schemes:
     test:
       targets:
         - SnapspoolTests
+        - SnapspoolBuildArtifactTests

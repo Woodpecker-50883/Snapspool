@@ -75,11 +75,11 @@ P1のテスト指摘だけを拾ったもの。P2のテスト指摘76件は先�
 
 - [x] App Storeが要求する `Info.plist` の項目を埋める。対象 `Info.plist` / `xcodegen.yml`。満たすこと: `LSApplicationCategoryType` が `public.app-category.productivity` である / `NSHumanReadableCopyright` が設定されている（値は `docs/app-store-metadata.md` の著作権表記に合わせ、氏名部分は `<TODO>` のままでよい）/ ビルドした `.app` の `Info.plist` に両方が入っていることをテストで検証する。
 - [x] アプリ内からプライバシーポリシーに到達できるようにする。対象 `Sources/`。満たすこと: メニューバーのメニューから「プライバシーポリシー」を開ける / 開く先のURLは設定ファイルか定数1箇所で管理し、後からURLだけ差し替えられる / 日本語と英語の両方でメニュー項目が表示される / URLが未設定のときはメニュー項目を出さない（空のページを開かない）。（**Why**: App Storeはプライバシーポリシーへアプリ内から到達できることを要求する。URL自体はユーザーが用意するため、差し替え可能にしておく）
-- [ ] 配布用の署名設定を入れられる状態にする。対象 `xcodegen.yml`。満たすこと: `DEVELOPMENT_TEAM` をビルド設定から与えられる（環境変数か設定ファイル経由で、空のままでもローカルのアドホック署名でビルドが通る）/ 空の状態で `xcodebuild test` が従来どおり成功する / チームIDを与えたときに配布用の署名でビルドできる。（**Why**: 現在アドホック署名のみで、Apple Developerのチーム設定が入る余地が無い）
+- [x] 配布用の署名設定を入れられる状態にする。対象 `xcodegen.yml`。満たすこと: `DEVELOPMENT_TEAM` をビルド設定から与えられる（環境変数か設定ファイル経由で、空のままでもローカルのアドホック署名でビルドが通る）/ 空の状態で `xcodebuild test` が従来どおり成功する / チームIDを与えたときに配布用の署名でビルドできる。（**Why**: 現在アドホック署名のみで、Apple Developerのチーム設定が入る余地が無い）
 
 ## Phase 14: テストターゲットの分割（2026-10-16、構造的な衝突）
 
-- [ ] 外部コマンドを使うテストと、アプリをホストにするテストを別々のターゲットに分ける。対象 `xcodegen.yml` と `Tests/`。満たすこと: `xcodegen generate --spec xcodegen.yml && xcodebuild test -scheme Snapspool -destination 'platform=macOS' -derivedDataPath build/DerivedData -quiet` が**1件も失敗せずに**成功する / ステータス項目の所有者を確認するテスト（`testStatusItemWindowIsActuallyOwnedByControlCenter` 等）が、アプリをテストホストとして実際に実行される（スキップではなく実行） / ビルド成果物を調べるテスト（`BuildArtifactConfigurationTests`、`/usr/bin/xcrun` と `git` を外部プロセスとして起動する）が、サンドボックスに阻まれず実行される / 既存のテストを削除したり、検証内容を弱めたりして解決しない。（**Why**: `hostApplication: Snapspool` と `TEST_HOST` を入れた結果、全テストがサンドボックス有効のアプリ内で動くようになり、`xcrun -archs` と `git check-ignore` の起動が拒否されて6件が失敗している（終了コード1）。ステータス項目の検証はホストが必要、成果物の検証はサンドボックス外が必要で、1つのターゲットでは両立しない）
+- [x] 外部コマンドを使うテストと、アプリをホストにするテストを別々のターゲットに分ける。対象 `xcodegen.yml` と `Tests/`。満たすこと: `xcodegen generate --spec xcodegen.yml && xcodebuild test -scheme Snapspool -destination 'platform=macOS' -derivedDataPath build/DerivedData -quiet` が**1件も失敗せずに**成功する / ステータス項目の所有者を確認するテスト（`testStatusItemWindowIsActuallyOwnedByControlCenter` 等）が、アプリをテストホストとして実際に実行される（スキップではなく実行） / ビルド成果物を調べるテスト（`BuildArtifactConfigurationTests`、`/usr/bin/xcrun` と `git` を外部プロセスとして起動する）が、サンドボックスに阻まれず実行される / 既存のテストを削除したり、検証内容を弱めたりして解決しない。（**Why**: `hostApplication: Snapspool` と `TEST_HOST` を入れた結果、全テストがサンドボックス有効のアプリ内で動くようになり、`xcrun -archs` と `git check-ignore` の起動が拒否されて6件が失敗している（終了コード1）。ステータス項目の検証はホストが必要、成果物の検証はサンドボックス外が必要で、1つのターゲットでは両立しない）
 
 ## Phase 15: ショートカットを押して記録する方式に変える（2026-10-16 ユーザー要望）
 

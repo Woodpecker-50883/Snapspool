@@ -154,6 +154,33 @@ final class BuildArtifactConfigurationTests: XCTestCase {
         }
     }
 
+    func testDistributionTeamCanBeSuppliedWithoutChangingTheProject() throws {
+        let teamID = "SNAPTEST123"
+        let derivedDataPath = projectRoot
+            .appendingPathComponent("build/SigningSettingsDerivedData", isDirectory: true)
+            .path
+        let result = try run(
+            "/usr/bin/xcodebuild",
+            arguments: [
+                "-project", projectRoot.appendingPathComponent("Snapspool.xcodeproj").path,
+                "-scheme", "Snapspool",
+                "-derivedDataPath", derivedDataPath,
+                "-showBuildSettings",
+                "SNAPSPOOL_DEVELOPMENT_TEAM=\(teamID)",
+            ]
+        )
+
+        XCTAssertEqual(result.status, 0, result.standardError)
+        XCTAssertTrue(
+            result.standardOutput.contains("DEVELOPMENT_TEAM = \(teamID)"),
+            result.standardOutput
+        )
+        XCTAssertTrue(
+            result.standardOutput.contains("CODE_SIGN_STYLE = Automatic"),
+            result.standardOutput
+        )
+    }
+
     private func builtAppURL() throws -> URL {
         var directory = Bundle(for: Self.self).bundleURL
 
