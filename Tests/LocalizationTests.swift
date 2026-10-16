@@ -77,8 +77,12 @@ final class LocalizationTests: XCTestCase {
             "自動貼り付けを利用できません"
         ),
         "autopaste.permission-required-message": (
-            "The item was restored to the clipboard. Press Cmd+V to paste it.",
-            "クリップボードに戻したので Cmd+V で貼り付けてください。"
+            "The item was restored to the clipboard. Press Cmd+V to paste it.\n\nTo allow automatic paste, go to System Settings > Privacy & Security > Accessibility and enable Snapspool. You may need to restart Snapspool after granting access.",
+            "クリップボードに戻したので Cmd+V で貼り付けてください。\n\n自動貼り付けを許可するには、システム設定 > プライバシーとセキュリティ > アクセシビリティ の順に開き、Snapspoolを有効にしてください。許可後にSnapspoolの再起動が必要な場合があります。"
+        ),
+        "autopaste.open-accessibility-settings": (
+            "Open Accessibility Settings…",
+            "アクセシビリティ設定を開く…"
         ),
         "common.ok": ("OK", "OK"),
     ]

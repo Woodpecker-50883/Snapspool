@@ -101,13 +101,31 @@ protocol AutoPasteNotifying {
 
 @MainActor
 struct SystemAutoPasteNotifier: AutoPasteNotifying {
+    static let accessibilitySettingsURL = URL(
+        string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
+    )!
+
+    private let openURL: (URL) -> Bool
+    private let runAlert: (NSAlert) -> NSApplication.ModalResponse
+
+    init(
+        openURL: @escaping (URL) -> Bool = { NSWorkspace.shared.open($0) },
+        runAlert: @escaping (NSAlert) -> NSApplication.ModalResponse = { $0.runModal() }
+    ) {
+        self.openURL = openURL
+        self.runAlert = runAlert
+    }
+
     func notifyManualPasteRequired() {
         let alert = NSAlert()
         alert.alertStyle = .informational
         alert.messageText = L10n.string("autopaste.permission-required-title")
         alert.informativeText = L10n.string("autopaste.permission-required-message")
+        alert.addButton(withTitle: L10n.string("autopaste.open-accessibility-settings"))
         alert.addButton(withTitle: L10n.string("common.ok"))
-        alert.runModal()
+        if runAlert(alert) == .alertFirstButtonReturn {
+            _ = openURL(Self.accessibilitySettingsURL)
+        }
     }
 }
 

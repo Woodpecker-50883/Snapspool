@@ -37,6 +37,51 @@ final class AutoPasteTests: XCTestCase {
         XCTAssertEqual(log.calls, ["authorize", "notify"])
     }
 
+    func testPermissionNoticeOffersAccessibilitySettingsAndOpensTheAccessibilityPane() {
+        var openedURL: URL?
+        var displayedAlert: NSAlert?
+        let notifier = SystemAutoPasteNotifier(
+            openURL: {
+                openedURL = $0
+                return true
+            },
+            runAlert: {
+                displayedAlert = $0
+                return .alertFirstButtonReturn
+            }
+        )
+
+        notifier.notifyManualPasteRequired()
+
+        XCTAssertEqual(
+            displayedAlert?.buttons.map(\.title),
+            [
+                L10n.string("autopaste.open-accessibility-settings"),
+                L10n.string("common.ok"),
+            ]
+        )
+        XCTAssertEqual(
+            displayedAlert?.informativeText,
+            L10n.string("autopaste.permission-required-message")
+        )
+        XCTAssertEqual(openedURL, SystemAutoPasteNotifier.accessibilitySettingsURL)
+    }
+
+    func testPermissionNoticeKeepsSettingsClosedWhenOKIsChosen() {
+        var openedURLs: [URL] = []
+        let notifier = SystemAutoPasteNotifier(
+            openURL: {
+                openedURLs.append($0)
+                return true
+            },
+            runAlert: { _ in .alertSecondButtonReturn }
+        )
+
+        notifier.notifyManualPasteRequired()
+
+        XCTAssertTrue(openedURLs.isEmpty)
+    }
+
     func testSystemTargetProviderRejectsSnapspoolItself() {
         let log = AutoPasteCallLog()
         let application = LoggedTargetApplication(

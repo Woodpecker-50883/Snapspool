@@ -26,7 +26,8 @@
 "common.ok" = "OK";
 
 "autopaste.permission-required-title" = "Automatic Paste Unavailable";
-"autopaste.permission-required-message" = "The item was restored to the clipboard. Press Cmd+V to paste it.";
+"autopaste.permission-required-message" = "The item was restored to the clipboard. Press Cmd+V to paste it.\n\nTo allow automatic paste, go to System Settings > Privacy & Security > Accessibility and enable Snapspool. You may need to restart Snapspool after granting access.";
+"autopaste.open-accessibility-settings" = "Open Accessibility Settings…";
 
 "setup.title" = "Set Up Screenshots";
 "setup.introduction" = "To use screenshots with Snapspool, enable a macOS screenshot shortcut that copies screenshots to the clipboard.";
