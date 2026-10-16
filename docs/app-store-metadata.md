@@ -36,7 +36,8 @@ Snapspoolは、コピーしたものを後から選んで貼り直せるクリ�
 ■ 覚えるキーは増えません
 Command+C でコピー、Command+V で貼り付け。この2つはmacOS標準のままです。
 少し前にコピーしたものを使いたいときだけ Command+Shift+V を押すと、
-画像とテキストが混ざった履歴が新しい順に並びます。**選んだらそのまま貼り付けられます。**
+画像とテキストが混ざった履歴が新しい順に並びます。画像もテキストも、
+選んだらそのまま前面のアプリへ自動で貼り付けられます。
 （自動貼り付けは設定でオフにもできます。その場合はクリップボードに戻るだけになります）
 
 ■ スクリーンショットがファイルとしても残ります
@@ -70,7 +71,8 @@ copied earlier — images and screenshots included, not just text.
 ■ No new shortcuts to learn
 Command+C to copy and Command+V to paste stay exactly as macOS defines them.
 Press Command+Shift+V only when you want something older: your images and text
-appear together, newest first. **Pick one and it is pasted for you.**
+appear together, newest first. Pick an image or text item and it is automatically
+pasted into the app you were using.
 (Automatic pasting can be turned off in Settings, in which case the item simply
 returns to the clipboard.)
 

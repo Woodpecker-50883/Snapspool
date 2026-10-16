@@ -6,13 +6,13 @@ Apple Developerアカウントの操作や撮影など、本人でないとで�
 
 ## 1. 実装・成果物
 
-- [済] 実装（Phase 1〜13の実装分）。`requirements.md` の機能要件はすべて実装済み
+- [済] 実装（Phase 1〜16の実装分）。`requirements.md` の機能要件はすべて実装済み
 - [済] アプリアイコン（`Resources/Assets.xcassets/AppIcon.appiconset`、16〜1024の全10サイズ）
 - [済] メニューバーアイコン（テンプレート画像、ライト/ダーク両対応）
 - [済] 日本語・英語のローカライズ
-- [ループ] `Info.plist` の `LSApplicationCategoryType` と `NSHumanReadableCopyright`
-- [ループ] アプリ内からプライバシーポリシーへ到達する導線
-- [ループ] `DEVELOPMENT_TEAM` を外から与えられるビルド設定
+- [済] `Info.plist` の `LSApplicationCategoryType` と `NSHumanReadableCopyright`
+- [済] アプリ内からプライバシーポリシーへ到達する導線（公開URLの設定は要あなた）
+- [済] `DEVELOPMENT_TEAM` を外から与えられるビルド設定
 
 ## 2. 掲載情報
 
@@ -88,4 +88,4 @@ xcodebuild archive -scheme Snapspool -destination 'platform=macOS' \
 - **自動貼り付けを実装している**（2026-10-16に方針変更）。`CGEvent.post` による⌘V送出で
   ガイドライン2.4.5のリジェクトを受けた報告はあるが、Maccyが同じ実装のままApp Storeで
   配布されている前例を確認済み。落ちた場合は前例を挙げて反論する（詳細は `docs/technical-notes.md`）
-- **プライバシーポリシーはアプリ内からも到達できる必要がある**（実装タスクあり）
+- **プライバシーポリシーはアプリ内からも到達できる必要がある**。導線は実装済みで、公開URLの設定が残っている
