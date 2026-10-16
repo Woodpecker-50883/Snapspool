@@ -5,7 +5,7 @@ import XCTest
 
 @MainActor
 final class AutoPasteTests: XCTestCase {
-    func testAutoPasteIsEnabledByDefaultAndCanBeTurnedOff() {
+    func testAutoPasteIsEnabledByDefaultAndDisabledSettingSurvivesRelaunch() {
         let suiteName = "AutoPasteTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defer { defaults.removePersistentDomain(forName: suiteName) }
@@ -14,6 +14,7 @@ final class AutoPasteTests: XCTestCase {
         XCTAssertTrue(settings.autoPasteEnabled)
         settings.setAutoPasteEnabled(false)
         XCTAssertFalse(settings.autoPasteEnabled)
+        XCTAssertFalse(AppSettings(defaults: defaults).autoPasteEnabled)
     }
 
     func testDisabledAutoPasteDoesNotRequestPermissionOrSendAnEvent() {

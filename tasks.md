@@ -103,6 +103,6 @@ P1のテスト指摘だけを拾ったもの。P2のテスト指摘76件は先�
 - [x] `Tests/GlobalHotKeyTests.swift` の Carbon テストで登録失敗を `XCTSkip` にせず失敗として検出し、指定したキーコードと修飾キーそのものが登録されたことも検証して、`RegisterEventHotKey` の呼び出し削除・引数の固定化・誤指定のいずれでもテストが落ちるようにする。
 - [x] `Tests/MenuBarActionsTests.swift` のステータス項目ウィンドウ所有者テストを正式な `xcodebuild test` で確実に実行される構成にし、`XCTestConfigurationFilePath` の有無による誤スキップをなくして実際の所有者が `com.apple.controlcenter` であることを検証する。
 - [x] `SnapspoolTestable` を動的フレームワークとしてアプリへ埋め込む構成に対応し、生成される `Snapspool.framework` に一意な `CFBundleIdentifier` が入るよう `xcodegen.yml` へ `PRODUCT_BUNDLE_IDENTIFIER` を設定して、Releaseアーカイブの埋め込みフレームワークがMac App Store向けのバンドル要件を満たすことを検証する。
-- [ ] 自動貼り付けのオン・オフ設定を `UserDefaults` に永続化し、オフにした状態が再起動後も維持されることをテストで検証する。
+- [x] 自動貼り付けのオン・オフ設定を `UserDefaults` に永続化し、オフにした状態が再起動後も維持されることをテストで検証する。
 - [ ] 自動貼り付け先がSnapspool自身にならないよう、履歴ピッカーを表示する直前の前面アプリを保持し、項目確定後にそのアプリを再度前面化してから貼り付けイベントを送ることを、対象アプリの保持・再前面化・イベント送出の順序を含めてテストで検証する。
 - [ ] 自動貼り付けへの方針変更と矛盾する記述を同期する。対象 `requirements.md` / `docs/app-store-metadata.md` / `docs/release-checklist.md` / `docs/release-guide.md`。満たすこと: 既定オン時のテキスト選択も自動貼り付けとして完了条件に記載する / 配布形態の理由から「自動貼り付けを捨てた」を除く / 完了条件数を24件に直す / Phase 15・16が未完了なのに機能要件がすべて実装済みとする記述と、実装済みのプライバシーポリシー導線を「実装予定」とする記述を現状に合わせる。

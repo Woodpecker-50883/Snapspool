@@ -144,6 +144,7 @@ public final class AppSettings: ObservableObject {
         static let textLimit = "settings.textLimit"
         static let shortcutKeyCode = "settings.shortcut.keyCode"
         static let shortcutModifiers = "settings.shortcut.modifiers"
+        static let autoPasteEnabled = "settings.autoPasteEnabled"
     }
 
     @Published public private(set) var destinationURL: URL
@@ -202,7 +203,9 @@ public final class AppSettings: ObservableObject {
             ?? HistoryStore.defaultTextLimit
         imageLimit = Self.clampedLimit(storedImageLimit)
         textLimit = Self.clampedLimit(storedTextLimit)
-        autoPasteEnabled = true
+        autoPasteEnabled = defaults.object(forKey: Key.autoPasteEnabled) == nil
+            ? true
+            : defaults.bool(forKey: Key.autoPasteEnabled)
 
         if defaults.object(forKey: Key.shortcutKeyCode) != nil,
            defaults.object(forKey: Key.shortcutModifiers) != nil {
@@ -245,6 +248,7 @@ public final class AppSettings: ObservableObject {
 
     public func setAutoPasteEnabled(_ isEnabled: Bool) {
         autoPasteEnabled = isEnabled
+        defaults.set(isEnabled, forKey: Key.autoPasteEnabled)
     }
 
     @discardableResult
