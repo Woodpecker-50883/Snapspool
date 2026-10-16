@@ -44,9 +44,10 @@ final class ClipboardRestorerTests: XCTestCase {
         let staleItem = NSPasteboardItem()
         staleItem.setData(Data("stale".utf8), forType: staleType)
         pasteboard.clearContents()
-        guard pasteboard.writeObjects([staleItem]) else {
-            throw XCTSkip("The current test sandbox denies access to the pasteboard server")
-        }
+        XCTAssertTrue(
+            pasteboard.writeObjects([staleItem]),
+            "The production pasteboard path must be available during the normal test run"
+        )
 
         let textData = Data("production adapter".utf8)
         let entry = HistoryEntry(content: .text(textData), detectionOrder: 0)
@@ -61,6 +62,49 @@ final class ClipboardRestorerTests: XCTestCase {
         XCTAssertNil(item.data(forType: staleType))
         XCTAssertEqual(item.data(forType: ClipboardContentSelector.plainTextType), textData)
         XCTAssertEqual(item.data(forType: ClipboardContentSelector.restoredType), Data())
+    }
+
+    @MainActor
+    func testRestoresImageThroughSystemPasteboardWithAllRequiredRepresentations() throws {
+        let pasteboard = NSPasteboard.withUniqueName()
+        defer { pasteboard.releaseGlobally() }
+
+        let staleType = NSPasteboard.PasteboardType("app.snapspool.stale-image-test-data")
+        let staleItem = NSPasteboardItem()
+        staleItem.setData(Data("stale".utf8), forType: staleType)
+        pasteboard.clearContents()
+        XCTAssertTrue(
+            pasteboard.writeObjects([staleItem]),
+            "The production pasteboard path must be available during the normal test run"
+        )
+
+        let pngData = try makePNGData()
+        let fileURL = temporaryDirectory.appendingPathComponent("system-pasteboard.png")
+        try pngData.write(to: fileURL)
+        let entry = HistoryEntry(
+            content: .image(ImageHistoryEntry(fileURL: fileURL, isFallback: false)),
+            detectionOrder: 0
+        )
+
+        try ClipboardRestorer(
+            pasteboard: SystemClipboardPasteboardWriter(pasteboard: pasteboard)
+        ).restore(entry)
+
+        let items = try XCTUnwrap(pasteboard.pasteboardItems)
+        XCTAssertEqual(items.count, 1)
+        let item = try XCTUnwrap(items.first)
+        XCTAssertNil(item.data(forType: staleType))
+        XCTAssertEqual(item.data(forType: ClipboardContentSelector.pngType), pngData)
+        XCTAssertEqual(item.data(forType: ClipboardContentSelector.restoredType), Data())
+
+        let tiffData = try XCTUnwrap(item.data(forType: ClipboardContentSelector.tiffType))
+        let original = try XCTUnwrap(NSBitmapImageRep(data: pngData))
+        let restored = try XCTUnwrap(NSBitmapImageRep(data: tiffData))
+        XCTAssertEqual(restored.pixelsWide, original.pixelsWide)
+        XCTAssertEqual(restored.pixelsHigh, original.pixelsHigh)
+        XCTAssertEqual(restored.hasAlpha, original.hasAlpha)
+        XCTAssertEqual(restored.colorSpaceName, original.colorSpaceName)
+        XCTAssertEqual(restoredPixelData(restored), restoredPixelData(original))
     }
 
     @MainActor
