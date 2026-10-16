@@ -19,6 +19,7 @@ targets:
       - path: Resources
     dependencies:
       - target: SnapspoolTestable
+        embed: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.snapspool.Snapspool
@@ -32,7 +33,7 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
 
   SnapspoolTestable:
-    type: library.static
+    type: framework
     platform: macOS
     sources:
       - path: Sources
@@ -40,21 +41,25 @@ targets:
           - SnapspoolApp.swift
     settings:
       base:
-        PRODUCT_NAME: SnapspoolTestable
+        PRODUCT_NAME: Snapspool
         PRODUCT_MODULE_NAME: Snapspool
+        GENERATE_INFOPLIST_FILE: YES
 
   SnapspoolTests:
     type: bundle.unit-test
     platform: macOS
+    hostApplication: Snapspool
     sources:
       - path: Tests
       - path: Resources
     dependencies:
       - target: SnapspoolTestable
+      - target: Snapspool
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.snapspool.SnapspoolTests
         GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Snapspool.app/Contents/MacOS/Snapspool
 
 schemes:
   Snapspool:

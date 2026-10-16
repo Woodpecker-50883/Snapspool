@@ -125,16 +125,12 @@ final class AppSettingsTests: XCTestCase {
             picturesDirectory: temporaryDirectory.appendingPathComponent("Pictures")
         )
 
-        guard settings.setDestinationURL(destination) else {
-            throw XCTSkip("The current test sandbox cannot create security-scoped bookmarks")
-        }
+        XCTAssertTrue(
+            settings.setDestinationURL(destination),
+            "The sandboxed app test host must create a security-scoped bookmark"
+        )
         let bookmark = try XCTUnwrap(defaults.data(forKey: "settings.destinationBookmark"))
-        let resolved: ResolvedSecurityScopedBookmark
-        do {
-            resolved = try systemAccess.resolveBookmark(bookmark)
-        } catch {
-            throw XCTSkip("The current test sandbox cannot resolve security-scoped bookmarks: \(error)")
-        }
+        let resolved = try systemAccess.resolveBookmark(bookmark)
         let relaunched = AppSettings(
             defaults: defaults,
             resourceAccess: systemAccess,
