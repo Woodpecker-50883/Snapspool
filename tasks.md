@@ -80,5 +80,5 @@ P1のテスト指摘だけを拾ったもの。P2のテスト指摘76件は先�
 - [x] `Tests/AppSettingsTests.swift` の実ブックマーク往復テストを、セキュリティスコープブックマークを作成・解決できるサンドボックス付きテスト経路で必ず実行し、`makeBookmark` または `resolveBookmark` が壊れた場合は `XCTSkip` ではなく失敗するようにする。
 - [x] `Tests/ClipboardRestorerTests.swift` の本番 pasteboard テストを通常のテスト実行でスキップせずに通し、古い内容の消去に加えて画像復元時の `public.png`・`public.tiff`・復元マーカーが `SystemClipboardPasteboardWriter` 経由で実際に書き込まれることを検証する。
 - [x] `Tests/GlobalHotKeyTests.swift` の Carbon テストで登録失敗を `XCTSkip` にせず失敗として検出し、指定したキーコードと修飾キーそのものが登録されたことも検証して、`RegisterEventHotKey` の呼び出し削除・引数の固定化・誤指定のいずれでもテストが落ちるようにする。
-- [ ] `Tests/MenuBarActionsTests.swift` のステータス項目ウィンドウ所有者テストを正式な `xcodebuild test` で確実に実行される構成にし、`XCTestConfigurationFilePath` の有無による誤スキップをなくして実際の所有者が `com.apple.controlcenter` であることを検証する。
+- [x] `Tests/MenuBarActionsTests.swift` のステータス項目ウィンドウ所有者テストを正式な `xcodebuild test` で確実に実行される構成にし、`XCTestConfigurationFilePath` の有無による誤スキップをなくして実際の所有者が `com.apple.controlcenter` であることを検証する。
 - [ ] `SnapspoolTestable` を動的フレームワークとしてアプリへ埋め込む構成に対応し、生成される `Snapspool.framework` に一意な `CFBundleIdentifier` が入るよう `xcodegen.yml` へ `PRODUCT_BUNDLE_IDENTIFIER` を設定して、Releaseアーカイブの埋め込みフレームワークがMac App Store向けのバンドル要件を満たすことを検証する。

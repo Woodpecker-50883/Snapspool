@@ -40,9 +40,9 @@ final class MenuBarActionsTests: XCTestCase {
     }
 
     func testStatusItemWindowIsActuallyOwnedByControlCenter() throws {
-        try XCTSkipIf(
-            ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil,
-            "テストバンドルを直接実行した場合はWindowServer上のステータス項目を生成できないためスキップ（xcodebuild test でのみ実行される）"
+        try XCTSkipUnless(
+            Bundle.main.bundleIdentifier == "app.snapspool.Snapspool",
+            "ステータス項目のWindowServer所有者はアプリをテストホストにしたxcodebuild testで検証する"
         )
         _ = NSApplication.shared
         let menu = MenuBarActions(
