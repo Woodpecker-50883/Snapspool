@@ -21,12 +21,28 @@ protocol GlobalHotKeyRegistering: AnyObject {
 }
 
 final class CarbonGlobalHotKeyRegistrar: GlobalHotKeyRegistering, @unchecked Sendable {
+    typealias RegisterEventHotKeyFunction = (
+        UInt32,
+        UInt32,
+        EventHotKeyID,
+        EventTargetRef?,
+        OptionBits,
+        UnsafeMutablePointer<EventHotKeyRef?>?
+    ) -> OSStatus
+
     nonisolated static let eventSignature: OSType = 0x534E_4150 // "SNAP"
     nonisolated static let eventID: UInt32 = 1
 
+    private let registerEventHotKey: RegisterEventHotKeyFunction
     private var hotKey: EventHotKeyRef?
     private var eventHandler: EventHandlerRef?
     nonisolated(unsafe) private var action: (@MainActor @Sendable () -> Void)?
+
+    init(
+        registerEventHotKey: @escaping RegisterEventHotKeyFunction = RegisterEventHotKey
+    ) {
+        self.registerEventHotKey = registerEventHotKey
+    }
 
     func register(
         _ shortcut: GlobalShortcut,
@@ -40,7 +56,7 @@ final class CarbonGlobalHotKeyRegistrar: GlobalHotKeyRegistering, @unchecked Sen
             signature: Self.eventSignature,
             id: Self.eventID
         )
-        let registrationStatus = RegisterEventHotKey(
+        let registrationStatus = registerEventHotKey(
             shortcut.keyCode,
             shortcut.modifiers,
             identifier,

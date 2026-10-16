@@ -40,6 +40,16 @@
 スキップされたテストが「成功」に混ざって見えなくなる（実際に「98件成功」の中に
 3件の無検証テストが隠れていた）。
 
+**ビルド・テストの出力は必ず絞ること**（2026-10-16、トークン消費の実測から）:
+`xcodebuild` は素のままだと1回で1,100行・130KBを出力する。この出力は文脈に残り、
+**以降の内部往復すべてで再送される**ため、やり直すほど雪だるま式に消費が増える。
+実行するときは必ず出力を絞り、**失敗した行だけを読むこと**。例:
+
+    xcodebuild build ... -quiet 2>&1 | grep -E "error:|warning: unable|BUILD" | head -40
+
+成功したビルドの詳細ログは読まない。失敗時も、まず該当するエラー行だけを見て、
+それでも原因が分からないときにだけ範囲を広げること。
+
 **テスト実行について**（1周目で判明）: 実装エージェントのサンドボックス内では
 `xcodebuild test` が `testmanagerd` に接続できず失敗する。実装中の自己検証は、
 ビルド済みのテストバンドルを直接実行して行うこと。`loop.py` 側のテスト実行は
@@ -69,6 +79,6 @@ P1のテスト指摘だけを拾ったもの。P2のテスト指摘76件は先�
 - [ ] `findings.md`（`~/dev/vault/projects/Snapspool/findings.md`）の未対応指摘をゼロにする。満たすこと: 各指摘について、修正したものは行頭を `- [x]` に書き換えて対応内容を1行で添える / 修正しないものは先送りの理由を1行で添える / P1が1件も未対応で残らない。 <!-- BLOCKED: 指摘を直すか先送りするかの判断は人間側で行う（LOOP_RULES「出荷前に findings.md をゼロにする」） -->
 - [x] `Tests/AppSettingsTests.swift` の実ブックマーク往復テストを、セキュリティスコープブックマークを作成・解決できるサンドボックス付きテスト経路で必ず実行し、`makeBookmark` または `resolveBookmark` が壊れた場合は `XCTSkip` ではなく失敗するようにする。
 - [x] `Tests/ClipboardRestorerTests.swift` の本番 pasteboard テストを通常のテスト実行でスキップせずに通し、古い内容の消去に加えて画像復元時の `public.png`・`public.tiff`・復元マーカーが `SystemClipboardPasteboardWriter` 経由で実際に書き込まれることを検証する。
-- [ ] `Tests/GlobalHotKeyTests.swift` の Carbon テストで登録失敗を `XCTSkip` にせず失敗として検出し、指定したキーコードと修飾キーそのものが登録されたことも検証して、`RegisterEventHotKey` の呼び出し削除・引数の固定化・誤指定のいずれでもテストが落ちるようにする。
+- [x] `Tests/GlobalHotKeyTests.swift` の Carbon テストで登録失敗を `XCTSkip` にせず失敗として検出し、指定したキーコードと修飾キーそのものが登録されたことも検証して、`RegisterEventHotKey` の呼び出し削除・引数の固定化・誤指定のいずれでもテストが落ちるようにする。
 - [ ] `Tests/MenuBarActionsTests.swift` のステータス項目ウィンドウ所有者テストを正式な `xcodebuild test` で確実に実行される構成にし、`XCTestConfigurationFilePath` の有無による誤スキップをなくして実際の所有者が `com.apple.controlcenter` であることを検証する。
 - [ ] `SnapspoolTestable` を動的フレームワークとしてアプリへ埋め込む構成に対応し、生成される `Snapspool.framework` に一意な `CFBundleIdentifier` が入るよう `xcodegen.yml` へ `PRODUCT_BUNDLE_IDENTIFIER` を設定して、Releaseアーカイブの埋め込みフレームワークがMac App Store向けのバンドル要件を満たすことを検証する。
