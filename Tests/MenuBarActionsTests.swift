@@ -232,6 +232,32 @@ final class MenuBarActionsTests: XCTestCase {
         XCTAssertEqual(setupGuideOpenCount, 1)
     }
 
+    func testBuiltMenuOpensConfiguredPrivacyPolicyURL() throws {
+        let privacyPolicyURL = try XCTUnwrap(URL(string: "https://example.com/privacy"))
+        var openedURL: URL?
+        let actions = MenuBarActions(
+            clipboardMonitor: ClipboardMonitor(pasteboard: FakeMenuPasteboard()) { _ in },
+            privacyPolicyURL: privacyPolicyURL,
+            openURL: { openedURL = $0 }
+        )
+
+        let menu = actions.makeMenu()
+        let privacyPolicyItem = try XCTUnwrap(menu.item(at: 4))
+
+        XCTAssertEqual(privacyPolicyItem.title, L10n.string("menu.privacy-policy"))
+        activate(privacyPolicyItem)
+        XCTAssertEqual(openedURL, privacyPolicyURL)
+    }
+
+    func testBuiltMenuOmitsPrivacyPolicyWhenURLIsUnset() {
+        let actions = MenuBarActions(
+            clipboardMonitor: ClipboardMonitor(pasteboard: FakeMenuPasteboard()) { _ in },
+            privacyPolicyURL: nil
+        )
+
+        XCTAssertNil(actions.makeMenu().item(withTitle: L10n.string("menu.privacy-policy")))
+    }
+
     func testRegistrationWarningIsShownWithoutDisablingHistoryMenu() throws {
         var historyOpenCount = 0
         let actions = MenuBarActions(

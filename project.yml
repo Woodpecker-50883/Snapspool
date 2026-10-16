@@ -35,6 +35,8 @@ progress_log_dir: ~/dev/vault/projects/Snapspool
 
 reviews:
   - name: code
+    # テスト・文書以外の変更が無い周回では走らせない(空振りを避ける)
+    when: source
     command: >-
       codex exec review "Look at the current uncommitted changes in this
       git repository (git diff, including untracked files). Review ONLY
@@ -45,6 +47,7 @@ reviews:
       balanced with stopAccessingSecurityScopedResource, and the sandbox
       must never be disabled to work around a problem."
   - name: tests
+    when: tests
     command: >-
       codex exec review "Look at the current uncommitted changes in this
       git repository (git diff, including untracked files). Review ONLY
@@ -54,6 +57,8 @@ reviews:
       if the implementation were subtly broken; flag weak/tautological
       assertions and missing edge cases."
   - name: conformance
+    # 実装の変更が無ければ要件との齟齬も生じないため走らせない
+    when: source
     command: >-
       codex exec -s workspace-write "requirements.md を読み、直前の
       uncommitted diff(git diff で確認)がどの要件に対応しているか

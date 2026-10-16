@@ -19,6 +19,18 @@ final class BuildArtifactConfigurationTests: XCTestCase {
         XCTAssertEqual(info["LSUIElement"] as? Bool, true)
     }
 
+    func testBuiltAppContainsRequiredAppStoreMetadata() throws {
+        let info = try infoDictionary(
+            at: try builtAppURL().appendingPathComponent("Contents/Info.plist")
+        )
+
+        XCTAssertEqual(
+            info["LSApplicationCategoryType"] as? String,
+            "public.app-category.productivity"
+        )
+        XCTAssertEqual(info["NSHumanReadableCopyright"] as? String, "2026 <TODO>")
+    }
+
     func testBuiltAppContainsCompiledAppIconAssets() throws {
         let appURL = try builtAppURL()
         let infoURL = appURL.appendingPathComponent("Contents/Info.plist")

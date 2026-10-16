@@ -219,6 +219,8 @@ final class MenuBarActions: NSObject {
     private let hasHotKeyRegistrationWarning: () -> Bool
     private let showSettings: () -> Void
     private let showSetupGuide: () -> Void
+    private let privacyPolicyURL: URL?
+    private let openURL: (URL) -> Void
     private let localize: (String) -> String
 
     init(
@@ -233,6 +235,8 @@ final class MenuBarActions: NSObject {
             )
         },
         showSetupGuide: @escaping () -> Void = {},
+        privacyPolicyURL: URL? = AppLinks.privacyPolicyURL,
+        openURL: @escaping (URL) -> Void = { NSWorkspace.shared.open($0) },
         localize: @escaping (String) -> String = { L10n.string($0) },
         terminateApplication: @escaping () -> Void = { NSApplication.shared.terminate(nil) }
     ) {
@@ -241,6 +245,8 @@ final class MenuBarActions: NSObject {
         self.hasHotKeyRegistrationWarning = hasHotKeyRegistrationWarning
         self.showSettings = showSettings
         self.showSetupGuide = showSetupGuide
+        self.privacyPolicyURL = privacyPolicyURL
+        self.openURL = openURL
         self.localize = localize
         self.terminateApplication = terminateApplication
     }
@@ -268,6 +274,12 @@ final class MenuBarActions: NSObject {
         menu.addItem(makeItem(title: monitoringMenuTitle, action: #selector(pauseMonitoring(_:))))
         menu.addItem(makeItem(title: localize("menu.settings"), action: #selector(openSettings(_:))))
         menu.addItem(makeItem(title: localize("menu.setup-guide"), action: #selector(openSetupGuide(_:))))
+        if privacyPolicyURL != nil {
+            menu.addItem(makeItem(
+                title: localize("menu.privacy-policy"),
+                action: #selector(openPrivacyPolicy(_:))
+            ))
+        }
         menu.addItem(.separator())
         menu.addItem(makeItem(title: localize("menu.quit"), action: #selector(quit(_:))))
         return menu
@@ -288,6 +300,11 @@ final class MenuBarActions: NSObject {
 
     @objc func openSetupGuide(_ sender: Any? = nil) {
         showSetupGuide()
+    }
+
+    @objc func openPrivacyPolicy(_ sender: Any? = nil) {
+        guard let privacyPolicyURL else { return }
+        openURL(privacyPolicyURL)
     }
 
     @objc func quit(_ sender: Any? = nil) {

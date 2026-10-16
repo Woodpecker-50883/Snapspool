@@ -45,7 +45,7 @@
   MVPでは不要。
   出典: [Apple Developer Forums #811443](https://developer.apple.com/forums/thread/811443)
 
-### 自動貼り付けを入れない技術的根拠
+### 自動貼り付けの扱い（2026-10-16に方針変更）
 
 - [確認済み] App Sandbox Design Guide は「`CGEventPost` のようなキーボード/マウスイベントの
   送出はサンドボックスの制限を回避する手段になるため、サンドボックスアプリからは許可されない」
@@ -57,7 +57,13 @@
   という実装でガイドライン2.4.5によりリジェクトされ、スレッド上では未解決のまま
   他の開発者も同じリジェクトを報告している。
   出典: [Apple Developer Forums #820594](https://developer.apple.com/forums/thread/820594)
-- → **MVPでは自動貼り付けを実装しない**。手動 `Cmd+V` を前提とする
+- [確認済み] **2026-10-16追記**: Maccyは `CGEvent(...).post(tap: .cgSessionEventTap)` で
+  自動貼り付けを実装したまま、Mac App Storeで配布されている
+  （[Clipboard.swift:143-148](https://github.com/p0deje/Maccy/blob/master/Maccy/Clipboard.swift)、
+  App Store向けの条件分岐は見当たらず、entitlementsは `app-sandbox` 有効）。
+  つまり**この実装でApp Storeを通る前例が実在する**
+- → **自動貼り付けを実装する**。リジェクト報告も実在するため、落ちた場合は
+  この前例を挙げてResolution Centerで反論する。権限が無い環境では手動 `Cmd+V` にフォールバックする
 
 ### 審査・公開
 
