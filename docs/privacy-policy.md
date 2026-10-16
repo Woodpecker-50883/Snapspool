@@ -42,8 +42,8 @@ Snapspoolはクリップボードの内容を扱いますが、**すべて利用
 
 ### お問い合わせ
 
-<!-- TODO: 公開前にサポート用の連絡先またはURLに差し替える -->
-（サポート連絡先）
+不具合のご報告やご要望は、GitHubのIssuesへお願いします。
+https://github.com/Woodpecker-50883/Snapspool/issues
 
 ---
 
@@ -84,5 +84,5 @@ The following are never added to history or written to disk, even when copied:
 
 ### Contact
 
-<!-- TODO: replace with support contact or URL before release -->
-(Support contact)
+For bug reports and feature requests, please use GitHub Issues:
+https://github.com/Woodpecker-50883/Snapspool/issues

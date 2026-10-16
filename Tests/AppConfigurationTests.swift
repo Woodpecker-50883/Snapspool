@@ -28,7 +28,7 @@ final class BuildArtifactConfigurationTests: XCTestCase {
             info["LSApplicationCategoryType"] as? String,
             "public.app-category.productivity"
         )
-        XCTAssertEqual(info["NSHumanReadableCopyright"] as? String, "2026 <TODO>")
+        XCTAssertEqual(info["NSHumanReadableCopyright"] as? String, "2026 Woodpecker-50883")
     }
 
     func testBuiltAppContainsCompiledAppIconAssets() throws {

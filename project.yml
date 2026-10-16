@@ -30,6 +30,12 @@ stuck_threshold: 3
 # tasks.md の進捗をスマホのGitHubアプリから読むために有効にしている。
 git_push: true
 
+# ビルド成果物が溜まり続けるのを防ぐ。keep 以外は毎周削除する
+# (2026-10-17にディスク満杯で作業が止まったため追加)
+build_cleanup:
+  path: build
+  keep: [DerivedData]
+
 review_log_dir: ~/dev/vault/projects/Snapspool/review
 progress_log_dir: ~/dev/vault/projects/Snapspool
 

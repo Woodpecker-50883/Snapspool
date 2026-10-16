@@ -30,7 +30,7 @@ targets:
         INFOPLIST_FILE: Info.plist
         GENERATE_INFOPLIST_FILE: NO
         SNAPSPOOL_APP_CATEGORY: public.app-category.productivity
-        SNAPSPOOL_COPYRIGHT: "2026 <TODO>"
+        SNAPSPOOL_COPYRIGHT: "2026 Woodpecker-50883"
         CODE_SIGN_ENTITLEMENTS: Snapspool.entitlements
         ENABLE_APP_SANDBOX: YES
         COMBINE_HIDPI_IMAGES: YES

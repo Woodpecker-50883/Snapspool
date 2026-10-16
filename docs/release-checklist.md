@@ -27,7 +27,7 @@ Apple Developerアカウントの操作や撮影など、本人でないとで�
 
 ### 3-1. プライバシーポリシーを公開する
 
-`docs/privacy-policy.md` の末尾にある連絡先の `TODO` を埋めてから、次のいずれかで公開する。
+`docs/privacy-policy.md` は記入済み。次のいずれかで公開する。
 
 1. **GitHub Pages** — このリポジトリをpublicにしてPagesを有効化（最も手軽）
 2. **公開用の別リポジトリ** — 本体はprivateのまま、文書だけ公開

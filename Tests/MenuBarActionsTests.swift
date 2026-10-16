@@ -97,6 +97,34 @@ final class MenuBarActionsTests: XCTestCase {
         XCTAssertEqual(image.size, NSSize(width: 18, height: 18))
     }
 
+    func testLaunchedBuiltAppUsesImageFromApplicationBundleForStatusItem() throws {
+        try XCTSkipUnless(
+            Bundle.main.bundleIdentifier == "app.snapspool.Snapspool",
+            "ビルドしたアプリをテストホストとして起動するxcodebuild testで検証する"
+        )
+        XCTAssertEqual(Bundle.main.bundleURL.pathExtension, "app")
+        XCTAssertEqual(
+            Bundle(for: MenuBarStatusItemController.self).bundleURL.pathExtension,
+            "framework",
+            "実装フレームワークと画像を持つアプリのバンドルが分かれていることを前提に検証する"
+        )
+
+        let menu = MenuBarActions(
+            clipboardMonitor: ClipboardMonitor(pasteboard: FakeMenuPasteboard()) { _ in }
+        ).makeMenu()
+        let controller = MenuBarStatusItemController(menu: menu)
+        let button = try XCTUnwrap(controller.statusItem.button)
+        let image = try XCTUnwrap(
+            button.image,
+            "起動中のSnapspool.appのAssets.carからメニューバー画像を読めていない"
+        )
+
+        XCTAssertTrue(image.isTemplate)
+        XCTAssertEqual(image.accessibilityDescription, "Snapspool")
+        XCTAssertEqual(button.title, "")
+        Self.retainedStatusItemControllers.append(controller)
+    }
+
     func testMissingMenuBarAssetUsesVisibleTextFallback() {
         let button = NSButton()
 

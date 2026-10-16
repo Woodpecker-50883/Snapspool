@@ -12,7 +12,7 @@ App Store Connectの各欄にそのまま貼れる形で用意したもの。
 | カテゴリ | 仕事効率化 / Productivity | `LSApplicationCategoryType = public.app-category.productivity` |
 | 価格 | 無料 | 課金・広告なし |
 | 年齢制限 | 4+ | 収集データなし・ユーザー生成コンテンツなし |
-| 著作権表記 | `2026 <あなたの氏名または屋号>` | `NSHumanReadableCopyright` にも同じ値を入れる |
+| 著作権表記 | `2026 Woodpecker-50883` | `NSHumanReadableCopyright` にも同じ値を入れる |
 
 ## サブタイトル（30文字以内）
 

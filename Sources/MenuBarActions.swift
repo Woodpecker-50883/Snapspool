@@ -152,7 +152,7 @@ public final class MenuBarStatusItemController {
     }
 
     static func loadMenuBarImage(
-        from bundle: Bundle = Bundle(for: MenuBarStatusItemController.self)
+        from bundle: Bundle = .main
     ) -> NSImage? {
         guard let image = bundle.image(forResource: NSImage.Name("MenuBarIcon")) else {
             return nil

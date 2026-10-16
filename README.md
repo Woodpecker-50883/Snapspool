@@ -86,31 +86,9 @@ open build/DerivedData/Build/Products/Debug/Snapspool.app
 
 [Issues](https://github.com/Woodpecker-50883/Snapspool/issues) へお願いします。
 
-## 開発について
-
-このアプリは、**要件定義から実装・レビューまでをAIエージェントで回す自作のパイプライン**で
-開発しました。人間が決めたのは要件と判断で、コードの大半は自律ループが書いています。
-
-リポジトリには、その過程がそのまま残っています。
-
-| ファイル | 内容 |
-|---|---|
-| [requirements.md](requirements.md) | 要件定義（現在の仕様） |
-| [tasks.md](tasks.md) / [tasks-archive.md](tasks-archive.md) | タスク分解と完了記録 |
-| [docs/decision-log.md](docs/decision-log.md) | 判断の経緯。**覆した判断とその理由**も含む |
-| [docs/technical-notes.md](docs/technical-notes.md) | サンドボックスやAPIの調査結果（出典付き） |
-
-開発中に起きたことの一例です。
-
-- **「完了」と報告されたのに実際には未対応**が3回起きた。原因は毎回、完了条件が
-  検証不能だったこと（「サンドボックスが有効」「UIを塞がない」など）。
-  機械的に確かめられる条件（`codesign` の出力、`Thread.isMainThread`）に書き換えて解決
-- **自動貼り付けを一度スコープ外にした**。App Storeのリジェクト事例だけを見て判断したが、
-  同種アプリが同じ実装のまま配布されている前例を後から確認し、判断を覆した
-
 ## ライセンス
 
-<!-- TODO: 公開前に決める。MIT など -->
+[MIT License](LICENSE) — Copyright (c) 2026 Woodpecker-50883
 
 ## 謝辞
 
