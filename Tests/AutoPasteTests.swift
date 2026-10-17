@@ -82,6 +82,106 @@ final class AutoPasteTests: XCTestCase {
         XCTAssertTrue(openedURLs.isEmpty)
     }
 
+    func testReturningFromSettingsRechecksPermissionAndShowsThatAutoPasteIsReady() {
+        let notificationCenter = NotificationCenter()
+        var authorizationChecks = 0
+        var displayedAlerts: [NSAlert] = []
+        let notifier = SystemAutoPasteNotifier(
+            openURL: { _ in true },
+            runAlert: {
+                displayedAlerts.append($0)
+                return displayedAlerts.count == 1 ? .alertFirstButtonReturn : .alertSecondButtonReturn
+            },
+            isAuthorized: {
+                authorizationChecks += 1
+                return true
+            },
+            notificationCenter: notificationCenter
+        )
+
+        notifier.notifyManualPasteRequired()
+        notificationCenter.post(name: NSApplication.didBecomeActiveNotification, object: nil)
+
+        XCTAssertEqual(authorizationChecks, 1)
+        XCTAssertEqual(displayedAlerts.count, 2)
+        XCTAssertEqual(
+            displayedAlerts.last?.messageText,
+            L10n.string("autopaste.permission-enabled-title")
+        )
+        XCTAssertEqual(
+            displayedAlerts.last?.informativeText,
+            L10n.string("autopaste.permission-enabled-message")
+        )
+
+        notificationCenter.post(name: NSApplication.didBecomeActiveNotification, object: nil)
+        XCTAssertEqual(authorizationChecks, 1, "Permission should be checked once per trip to Settings")
+    }
+
+    func testRestartButtonRelaunchesApplicationAndTerminatesCurrentInstance() {
+        let notificationCenter = NotificationCenter()
+        let applicationURL = URL(fileURLWithPath: "/Applications/Snapspool.app")
+        var relaunchedURLs: [URL] = []
+        var terminationCount = 0
+        var displayedAlerts: [NSAlert] = []
+        let notifier = SystemAutoPasteNotifier(
+            openURL: { _ in true },
+            runAlert: {
+                displayedAlerts.append($0)
+                return .alertFirstButtonReturn
+            },
+            isAuthorized: { false },
+            notificationCenter: notificationCenter,
+            applicationURL: applicationURL,
+            relaunchApplication: {
+                relaunchedURLs.append($0)
+                return true
+            },
+            terminateCurrentApplication: { terminationCount += 1 }
+        )
+
+        notifier.notifyManualPasteRequired()
+        notificationCenter.post(name: NSApplication.didBecomeActiveNotification, object: nil)
+
+        XCTAssertEqual(displayedAlerts.count, 2)
+        XCTAssertEqual(
+            displayedAlerts.last?.buttons.map(\.title),
+            [L10n.string("autopaste.restart"), L10n.string("autopaste.not-now")]
+        )
+        XCTAssertEqual(relaunchedURLs, [applicationURL])
+        XCTAssertEqual(terminationCount, 1)
+    }
+
+    func testFailedAutomaticRestartShowsManualFallbackWithoutTerminating() {
+        let notificationCenter = NotificationCenter()
+        var displayedAlerts: [NSAlert] = []
+        var terminationCount = 0
+        let notifier = SystemAutoPasteNotifier(
+            openURL: { _ in true },
+            runAlert: {
+                displayedAlerts.append($0)
+                return .alertFirstButtonReturn
+            },
+            isAuthorized: { false },
+            notificationCenter: notificationCenter,
+            relaunchApplication: { _ in false },
+            terminateCurrentApplication: { terminationCount += 1 }
+        )
+
+        notifier.notifyManualPasteRequired()
+        notificationCenter.post(name: NSApplication.didBecomeActiveNotification, object: nil)
+
+        XCTAssertEqual(displayedAlerts.count, 3)
+        XCTAssertEqual(
+            displayedAlerts.last?.messageText,
+            L10n.string("autopaste.restart-failed-title")
+        )
+        XCTAssertEqual(
+            displayedAlerts.last?.informativeText,
+            L10n.string("autopaste.restart-failed-message")
+        )
+        XCTAssertEqual(terminationCount, 0)
+    }
+
     func testSystemTargetProviderRejectsSnapspoolItself() {
         let log = AutoPasteCallLog()
         let application = LoggedTargetApplication(

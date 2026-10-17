@@ -77,12 +77,38 @@ final class LocalizationTests: XCTestCase {
             "自動貼り付けを利用できません"
         ),
         "autopaste.permission-required-message": (
-            "The item was restored to the clipboard. Press Cmd+V to paste it.\n\nTo allow automatic paste, go to System Settings > Privacy & Security > Accessibility and enable Snapspool. You may need to restart Snapspool after granting access.",
-            "クリップボードに戻したので Cmd+V で貼り付けてください。\n\n自動貼り付けを許可するには、システム設定 > プライバシーとセキュリティ > アクセシビリティ の順に開き、Snapspoolを有効にしてください。許可後にSnapspoolの再起動が必要な場合があります。"
+            "The item was restored to the clipboard. Press Cmd+V to paste it.\n\nTo enable automatic paste:\n1. Open Accessibility Settings.\n2. Turn on Snapspool.\n3. Return to Snapspool. Access will be checked automatically.\n\nIf Settings does not open, go to System Settings > Privacy & Security > Accessibility.",
+            "クリップボードに戻したので Cmd+V で貼り付けてください。\n\n自動貼り付けを有効にする手順：\n1. アクセシビリティ設定を開く。\n2. Snapspoolを有効にする。\n3. Snapspoolに戻る。権限は自動的に再確認されます。\n\n設定が開かない場合は、システム設定 > プライバシーとセキュリティ > アクセシビリティ の順に開いてください。"
         ),
         "autopaste.open-accessibility-settings": (
             "Open Accessibility Settings…",
             "アクセシビリティ設定を開く…"
+        ),
+        "autopaste.permission-enabled-title": (
+            "Automatic Paste Enabled",
+            "自動貼り付けが有効になりました"
+        ),
+        "autopaste.permission-enabled-message": (
+            "Snapspool now has access. Automatic paste is ready to use.",
+            "Snapspoolへのアクセスが許可されました。自動貼り付けを利用できます。"
+        ),
+        "autopaste.permission-not-active-title": (
+            "Access Is Not Active Yet",
+            "権限がまだ反映されていません"
+        ),
+        "autopaste.permission-not-active-message": (
+            "If you turned on Snapspool in Accessibility Settings, macOS may require Snapspool to restart before the change takes effect. You can restart it now with the button below.",
+            "アクセシビリティ設定でSnapspoolを有効にした場合、反映するためにmacOSがSnapspoolの再起動を必要とすることがあります。下のボタンで今すぐ再起動できます。"
+        ),
+        "autopaste.restart": ("Restart Snapspool", "Snapspoolを再起動"),
+        "autopaste.not-now": ("Not Now", "後で"),
+        "autopaste.restart-failed-title": (
+            "Snapspool Could Not Restart Itself",
+            "Snapspoolを自動で再起動できませんでした"
+        ),
+        "autopaste.restart-failed-message": (
+            "Quit Snapspool from its menu, then open it again. Your Accessibility setting has been preserved.",
+            "Snapspoolのメニューから終了し、もう一度開いてください。アクセシビリティの設定は維持されています。"
         ),
         "common.ok": ("OK", "OK"),
     ]

@@ -100,20 +100,49 @@ protocol AutoPasteNotifying {
 }
 
 @MainActor
-struct SystemAutoPasteNotifier: AutoPasteNotifying {
+final class SystemAutoPasteNotifier: NSObject, AutoPasteNotifying {
     static let accessibilitySettingsURL = URL(
         string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
     )!
 
     private let openURL: (URL) -> Bool
     private let runAlert: (NSAlert) -> NSApplication.ModalResponse
+    private let isAuthorized: () -> Bool
+    private let notificationCenter: NotificationCenter
+    private let applicationURL: URL
+    private let relaunchApplication: (URL) -> Bool
+    private let terminateCurrentApplication: () -> Void
+    private var isWaitingForSettingsReturn = false
 
     init(
         openURL: @escaping (URL) -> Bool = { NSWorkspace.shared.open($0) },
-        runAlert: @escaping (NSAlert) -> NSApplication.ModalResponse = { $0.runModal() }
+        runAlert: @escaping (NSAlert) -> NSApplication.ModalResponse = { $0.runModal() },
+        isAuthorized: @escaping () -> Bool = { CGPreflightPostEventAccess() },
+        notificationCenter: NotificationCenter = .default,
+        applicationURL: URL = Bundle.main.bundleURL,
+        relaunchApplication: @escaping (URL) -> Bool = { applicationURL in
+            (try? NSWorkspace.shared.launchApplication(
+                at: applicationURL,
+                options: [.newInstance],
+                configuration: [:]
+            )) != nil
+        },
+        terminateCurrentApplication: @escaping () -> Void = {
+            NSApplication.shared.terminate(nil)
+        }
     ) {
         self.openURL = openURL
         self.runAlert = runAlert
+        self.isAuthorized = isAuthorized
+        self.notificationCenter = notificationCenter
+        self.applicationURL = applicationURL
+        self.relaunchApplication = relaunchApplication
+        self.terminateCurrentApplication = terminateCurrentApplication
+        super.init()
+    }
+
+    deinit {
+        notificationCenter.removeObserver(self)
     }
 
     func notifyManualPasteRequired() {
@@ -124,8 +153,76 @@ struct SystemAutoPasteNotifier: AutoPasteNotifying {
         alert.addButton(withTitle: L10n.string("autopaste.open-accessibility-settings"))
         alert.addButton(withTitle: L10n.string("common.ok"))
         if runAlert(alert) == .alertFirstButtonReturn {
-            _ = openURL(Self.accessibilitySettingsURL)
+            startWaitingForSettingsReturn()
+            if !openURL(Self.accessibilitySettingsURL) {
+                stopWaitingForSettingsReturn()
+            }
         }
+    }
+
+    private func startWaitingForSettingsReturn() {
+        guard !isWaitingForSettingsReturn else { return }
+        isWaitingForSettingsReturn = true
+        notificationCenter.addObserver(
+            self,
+            selector: #selector(applicationDidBecomeActive),
+            name: NSApplication.didBecomeActiveNotification,
+            object: nil
+        )
+    }
+
+    private func stopWaitingForSettingsReturn() {
+        isWaitingForSettingsReturn = false
+        notificationCenter.removeObserver(
+            self,
+            name: NSApplication.didBecomeActiveNotification,
+            object: nil
+        )
+    }
+
+    @objc private func applicationDidBecomeActive() {
+        guard isWaitingForSettingsReturn else { return }
+        stopWaitingForSettingsReturn()
+
+        if isAuthorized() {
+            showPermissionEnabledAlert()
+        } else {
+            showRestartOffer()
+        }
+    }
+
+    private func showPermissionEnabledAlert() {
+        let alert = NSAlert()
+        alert.alertStyle = .informational
+        alert.messageText = L10n.string("autopaste.permission-enabled-title")
+        alert.informativeText = L10n.string("autopaste.permission-enabled-message")
+        alert.addButton(withTitle: L10n.string("common.ok"))
+        _ = runAlert(alert)
+    }
+
+    private func showRestartOffer() {
+        let alert = NSAlert()
+        alert.alertStyle = .informational
+        alert.messageText = L10n.string("autopaste.permission-not-active-title")
+        alert.informativeText = L10n.string("autopaste.permission-not-active-message")
+        alert.addButton(withTitle: L10n.string("autopaste.restart"))
+        alert.addButton(withTitle: L10n.string("autopaste.not-now"))
+        guard runAlert(alert) == .alertFirstButtonReturn else { return }
+
+        if relaunchApplication(applicationURL) {
+            terminateCurrentApplication()
+        } else {
+            showManualRestartAlert()
+        }
+    }
+
+    private func showManualRestartAlert() {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = L10n.string("autopaste.restart-failed-title")
+        alert.informativeText = L10n.string("autopaste.restart-failed-message")
+        alert.addButton(withTitle: L10n.string("common.ok"))
+        _ = runAlert(alert)
     }
 }
 

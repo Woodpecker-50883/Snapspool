@@ -26,8 +26,16 @@
 "common.ok" = "OK";
 
 "autopaste.permission-required-title" = "自動貼り付けを利用できません";
-"autopaste.permission-required-message" = "クリップボードに戻したので Cmd+V で貼り付けてください。\n\n自動貼り付けを許可するには、システム設定 > プライバシーとセキュリティ > アクセシビリティ の順に開き、Snapspoolを有効にしてください。許可後にSnapspoolの再起動が必要な場合があります。";
+"autopaste.permission-required-message" = "クリップボードに戻したので Cmd+V で貼り付けてください。\n\n自動貼り付けを有効にする手順：\n1. アクセシビリティ設定を開く。\n2. Snapspoolを有効にする。\n3. Snapspoolに戻る。権限は自動的に再確認されます。\n\n設定が開かない場合は、システム設定 > プライバシーとセキュリティ > アクセシビリティ の順に開いてください。";
 "autopaste.open-accessibility-settings" = "アクセシビリティ設定を開く…";
+"autopaste.permission-enabled-title" = "自動貼り付けが有効になりました";
+"autopaste.permission-enabled-message" = "Snapspoolへのアクセスが許可されました。自動貼り付けを利用できます。";
+"autopaste.permission-not-active-title" = "権限がまだ反映されていません";
+"autopaste.permission-not-active-message" = "アクセシビリティ設定でSnapspoolを有効にした場合、反映するためにmacOSがSnapspoolの再起動を必要とすることがあります。下のボタンで今すぐ再起動できます。";
+"autopaste.restart" = "Snapspoolを再起動";
+"autopaste.not-now" = "後で";
+"autopaste.restart-failed-title" = "Snapspoolを自動で再起動できませんでした";
+"autopaste.restart-failed-message" = "Snapspoolのメニューから終了し、もう一度開いてください。アクセシビリティの設定は維持されています。";
 
 "setup.title" = "スクリーンショットの設定";
 "setup.introduction" = "スクリーンショットをSnapspoolで扱うには、macOSの「スクリーンショットをクリップボードにコピー」のショートカットを有効にしてください。";

@@ -26,8 +26,16 @@
 "common.ok" = "OK";
 
 "autopaste.permission-required-title" = "Automatic Paste Unavailable";
-"autopaste.permission-required-message" = "The item was restored to the clipboard. Press Cmd+V to paste it.\n\nTo allow automatic paste, go to System Settings > Privacy & Security > Accessibility and enable Snapspool. You may need to restart Snapspool after granting access.";
+"autopaste.permission-required-message" = "The item was restored to the clipboard. Press Cmd+V to paste it.\n\nTo enable automatic paste:\n1. Open Accessibility Settings.\n2. Turn on Snapspool.\n3. Return to Snapspool. Access will be checked automatically.\n\nIf Settings does not open, go to System Settings > Privacy & Security > Accessibility.";
 "autopaste.open-accessibility-settings" = "Open Accessibility Settings…";
+"autopaste.permission-enabled-title" = "Automatic Paste Enabled";
+"autopaste.permission-enabled-message" = "Snapspool now has access. Automatic paste is ready to use.";
+"autopaste.permission-not-active-title" = "Access Is Not Active Yet";
+"autopaste.permission-not-active-message" = "If you turned on Snapspool in Accessibility Settings, macOS may require Snapspool to restart before the change takes effect. You can restart it now with the button below.";
+"autopaste.restart" = "Restart Snapspool";
+"autopaste.not-now" = "Not Now";
+"autopaste.restart-failed-title" = "Snapspool Could Not Restart Itself";
+"autopaste.restart-failed-message" = "Quit Snapspool from its menu, then open it again. Your Accessibility setting has been preserved.";
 
 "setup.title" = "Set Up Screenshots";
 "setup.introduction" = "To use screenshots with Snapspool, enable a macOS screenshot shortcut that copies screenshots to the clipboard.";
