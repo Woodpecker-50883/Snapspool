@@ -17,7 +17,8 @@ final class SystemPasteEventAuthorization: PasteEventAuthorizing {
     private let preflightAccess: () -> Bool
     private let requestSystemAccess: () -> Bool
     private let scheduleRecheck: (TimeInterval, @escaping @MainActor () -> Void) -> Void
-    private let isSystemDialogVisible: () -> Bool
+    private let systemDialogVisibility: () -> Bool?
+    private let isSystemDialogProcessRunning: () -> Bool
     private let workspaceNotificationCenter: NotificationCenter
     private var completions: [(Bool) -> Void] = []
     private var isWaitingForSystemDialog = false
@@ -32,15 +33,19 @@ final class SystemPasteEventAuthorization: PasteEventAuthorizing {
                 completion()
             }
         },
-        isSystemDialogVisible: @escaping () -> Bool = {
+        isSystemDialogVisible: @escaping () -> Bool? = {
             SystemPasteEventAuthorization.accessibilityPermissionDialogIsVisible()
+        },
+        isSystemDialogProcessRunning: @escaping () -> Bool = {
+            SystemPasteEventAuthorization.accessibilityPermissionDialogProcessIsRunning()
         },
         workspaceNotificationCenter: NotificationCenter = NSWorkspace.shared.notificationCenter
     ) {
         self.preflightAccess = preflightAccess
         self.requestSystemAccess = requestSystemAccess
         self.scheduleRecheck = scheduleRecheck
-        self.isSystemDialogVisible = isSystemDialogVisible
+        systemDialogVisibility = isSystemDialogVisible
+        self.isSystemDialogProcessRunning = isSystemDialogProcessRunning
         self.workspaceNotificationCenter = workspaceNotificationCenter
     }
 
@@ -74,7 +79,7 @@ final class SystemPasteEventAuthorization: PasteEventAuthorizing {
 
         if preflightAccess() {
             finishRequest(isAuthorized: true)
-        } else if isSystemDialogVisible() {
+        } else if systemDialogMayBeVisible() {
             // App activation notifications can be emitted while the system
             // permission dialog is still on screen. Its actual window, not
             // elapsed time after such a notification, decides when waiting
@@ -105,21 +110,34 @@ final class SystemPasteEventAuthorization: PasteEventAuthorizing {
             return
         }
 
-        if isSystemDialogVisible() {
+        if systemDialogMayBeVisible() {
             return
         }
 
         finishRequest(isAuthorized: false)
     }
 
-    private static func accessibilityPermissionDialogIsVisible() -> Bool {
+    private func systemDialogMayBeVisible() -> Bool {
+        switch systemDialogVisibility() {
+        case true:
+            return true
+        case false:
+            return false
+        case nil:
+            // WindowServer inspection can fail under sandboxing or while the
+            // server is transiently unavailable. The authorization warning is
+            // hosted by a dedicated process, so its lifetime provides an
+            // independent dismissal signal without guessing from elapsed time.
+            return isSystemDialogProcessRunning()
+        }
+    }
+
+    private static func accessibilityPermissionDialogIsVisible() -> Bool? {
         guard let windowInfo = CGWindowListCopyWindowInfo(
             [.optionOnScreenOnly, .excludeDesktopElements],
             kCGNullWindowID
         ) as? [[String: Any]] else {
-            // Failure to inspect WindowServer state must not cause an app
-            // alert to be placed over a permission dialog that may be open.
-            return true
+            return nil
         }
 
         return windowInfo.contains { window in
@@ -129,6 +147,12 @@ final class SystemPasteEventAuthorization: PasteEventAuthorizing {
             return NSRunningApplication(processIdentifier: pid_t(ownerPID.int32Value))?
                 .bundleIdentifier == permissionDialogBundleIdentifier
         }
+    }
+
+    private static func accessibilityPermissionDialogProcessIsRunning() -> Bool {
+        NSRunningApplication.runningApplications(
+            withBundleIdentifier: permissionDialogBundleIdentifier
+        ).contains { !$0.isTerminated }
     }
 
     private func finishRequest(isAuthorized: Bool) {

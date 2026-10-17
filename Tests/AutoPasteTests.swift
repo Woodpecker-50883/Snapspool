@@ -450,6 +450,53 @@ final class AutoPasteTests: XCTestCase {
         XCTAssertEqual(authorizationResults, [false, false], "Stale polls must not invoke completions twice")
     }
 
+    func testSystemAuthorizationUsesDialogProcessWhenWindowInspectionKeepsFailing() {
+        let workspaceNotificationCenter = NotificationCenter()
+        let unrelatedApplication = NSRunningApplication.current
+        var scheduledRechecks: [(@MainActor () -> Void)] = []
+        var isDialogProcessRunning = true
+        var authorizationResults: [Bool] = []
+        let authorization = SystemPasteEventAuthorization(
+            preflightAccess: { false },
+            requestSystemAccess: { false },
+            scheduleRecheck: { _, recheck in scheduledRechecks.append(recheck) },
+            isSystemDialogVisible: { nil },
+            isSystemDialogProcessRunning: { isDialogProcessRunning },
+            workspaceNotificationCenter: workspaceNotificationCenter
+        )
+
+        authorization.requestAccess { authorizationResults.append($0) }
+        authorization.requestAccess { authorizationResults.append($0) }
+        workspaceNotificationCenter.post(
+            name: NSWorkspace.didActivateApplicationNotification,
+            object: nil,
+            userInfo: [NSWorkspace.applicationUserInfoKey: unrelatedApplication]
+        )
+        scheduledRechecks.removeFirst()()
+
+        XCTAssertTrue(
+            authorizationResults.isEmpty,
+            "A failed window query must not put the app notice over a running system dialog"
+        )
+        XCTAssertEqual(scheduledRechecks.count, 1)
+
+        isDialogProcessRunning = false
+        scheduledRechecks.removeFirst()()
+
+        XCTAssertEqual(authorizationResults, [false, false])
+        workspaceNotificationCenter.post(
+            name: NSWorkspace.didActivateApplicationNotification,
+            object: nil,
+            userInfo: [NSWorkspace.applicationUserInfoKey: unrelatedApplication]
+        )
+        scheduledRechecks.forEach { $0() }
+        XCTAssertEqual(
+            authorizationResults,
+            [false, false],
+            "Each pending request must complete exactly once after the dialog process exits"
+        )
+    }
+
     func testReturningFromSettingsRechecksPermissionAndShowsThatAutoPasteIsReady() {
         var scheduledRecheck: (@MainActor () -> Void)?
         var authorizationChecks = 0
