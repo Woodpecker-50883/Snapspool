@@ -156,6 +156,47 @@ final class FirstLaunchSetupTests: XCTestCase {
         XCTAssertEqual(relaunchSequence, ["prepare", "launch", "terminate"])
     }
 
+    func testRestartRequiredStateSurvivesFallbackAndFailedPermissionNotifications() throws {
+        var scheduledPermissionRechecks: [(@MainActor () -> Void)] = []
+        var permissionCompletions: [(Bool) -> Void] = []
+        var displayedAlerts: [NSAlert] = []
+        let notifier = SystemAutoPasteNotifier(
+            openURL: { _ in true },
+            runAlert: {
+                displayedAlerts.append($0)
+                return .alertFirstButtonReturn
+            },
+            requestAuthorization: { permissionCompletions.append($0) },
+            isAuthorized: { false },
+            isApplicationActive: { true },
+            schedulePermissionRecheck: { _, recheck in
+                scheduledPermissionRechecks.append(recheck)
+            }
+        )
+        let controller = FirstLaunchSetupController(autoPastePermissionGuide: notifier)
+        let view = try XCTUnwrap(
+            controller.window?.contentViewController as? NSHostingController<FirstLaunchSetupView>
+        ).rootView
+        controller.show()
+
+        view.enableAutoPaste()
+        permissionCompletions.removeFirst()(false)
+        scheduledPermissionRechecks.removeLast()()
+        XCTAssertEqual(view.model.permissionState, .restartRequired)
+        XCTAssertTrue(view.showsRestartButton)
+
+        notifier.notifyManualPasteRequired()
+        XCTAssertEqual(view.model.permissionState, .restartRequired)
+        XCTAssertTrue(view.showsRestartButton)
+        XCTAssertTrue(displayedAlerts.isEmpty)
+
+        view.enableAutoPaste()
+        permissionCompletions.removeFirst()(false)
+        XCTAssertEqual(view.model.permissionState, .restartRequired)
+        XCTAssertTrue(view.showsRestartButton)
+        XCTAssertTrue(displayedAlerts.isEmpty)
+    }
+
     func testSetupRelaunchReopensGuideAsActiveWithoutPermissionEnabledAlert() throws {
         let (defaults, suiteName) = makeIsolatedDefaults()
         defer { defaults.removePersistentDomain(forName: suiteName) }

@@ -302,7 +302,7 @@ final class SystemAutoPasteNotifier: NSObject, AutoPasteNotifying, AutoPastePerm
 
     func notifyManualPasteRequired() {
         if isSetupGuideVisible {
-            permissionState = isAuthorized() ? .active : .unauthorized
+            updateVisibleSetupState(isAuthorized: isAuthorized())
             return
         }
 
@@ -326,7 +326,7 @@ final class SystemAutoPasteNotifier: NSObject, AutoPasteNotifying, AutoPastePerm
             if isAuthorized {
                 permissionState = .active
             } else if isSetupGuideVisible {
-                permissionState = .unauthorized
+                updateVisibleSetupState(isAuthorized: false)
                 if openURL(Self.accessibilitySettingsURL) {
                     startWaitingForSettingsReturn()
                 }
@@ -389,6 +389,14 @@ final class SystemAutoPasteNotifier: NSObject, AutoPasteNotifying, AutoPastePerm
         if isAuthorized() {
             permissionState = .active
         } else if permissionState == .active {
+            permissionState = .unauthorized
+        }
+    }
+
+    private func updateVisibleSetupState(isAuthorized: Bool) {
+        if isAuthorized {
+            permissionState = .active
+        } else if permissionState != .restartRequired {
             permissionState = .unauthorized
         }
     }
