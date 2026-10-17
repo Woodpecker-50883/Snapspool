@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 
 struct SetupGuideContent: Equatable {
@@ -11,6 +12,10 @@ struct SetupGuideContent: Equatable {
     let manualSettingsPath: String
     let openSettingsButtonTitle: String
     let enableAutoPasteButtonTitle: String
+    let restartAutoPasteButtonTitle: String
+    let permissionUnauthorizedStatus: String
+    let permissionRestartRequiredStatus: String
+    let permissionActiveStatus: String
     let doneButtonTitle: String
 
     static func localized(
@@ -55,8 +60,37 @@ struct SetupGuideContent: Equatable {
                 bundle: bundle,
                 language: language
             ),
+            restartAutoPasteButtonTitle: L10n.string(
+                "autopaste.restart",
+                bundle: bundle,
+                language: language
+            ),
+            permissionUnauthorizedStatus: L10n.string(
+                "setup.permission-status-unauthorized",
+                bundle: bundle,
+                language: language
+            ),
+            permissionRestartRequiredStatus: L10n.string(
+                "setup.permission-status-restart-required",
+                bundle: bundle,
+                language: language
+            ),
+            permissionActiveStatus: L10n.string(
+                "setup.permission-status-active",
+                bundle: bundle,
+                language: language
+            ),
             doneButtonTitle: L10n.string("setup.done", bundle: bundle, language: language)
         )
+    }
+}
+
+@MainActor
+final class FirstLaunchSetupModel: ObservableObject {
+    @Published var permissionState: AutoPastePermissionState
+
+    init(permissionState: AutoPastePermissionState) {
+        self.permissionState = permissionState
     }
 }
 
@@ -79,9 +113,23 @@ struct SystemKeyboardShortcutSettingsOpener {
 
 struct FirstLaunchSetupView: View {
     let content: SetupGuideContent
+    @ObservedObject var model: FirstLaunchSetupModel
     let openSettings: () -> Void
     let enableAutoPaste: () -> Void
+    let restartAutoPaste: () -> Void
     let dismiss: () -> Void
+
+    var permissionStatusText: String {
+        switch model.permissionState {
+        case .unauthorized: content.permissionUnauthorizedStatus
+        case .restartRequired: content.permissionRestartRequiredStatus
+        case .active: content.permissionActiveStatus
+        }
+    }
+
+    var showsRestartButton: Bool {
+        model.permissionState == .restartRequired
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -92,11 +140,16 @@ struct FirstLaunchSetupView: View {
             Text(content.destinationInstructions)
             Divider()
             Text(content.autoPasteInstructions)
+            Text(permissionStatusText)
+                .fontWeight(.semibold)
             Text(content.emptyHistoryRestartNote)
             Text(content.manualSettingsPath)
             HStack {
                 Button(content.openSettingsButtonTitle, action: openSettings)
                 Button(content.enableAutoPasteButtonTitle, action: enableAutoPaste)
+                if showsRestartButton {
+                    Button(content.restartAutoPasteButtonTitle, action: restartAutoPaste)
+                }
                 Spacer()
                 Button(content.doneButtonTitle, action: dismiss)
                     .keyboardShortcut(.defaultAction)
@@ -114,6 +167,7 @@ final class FirstLaunchSetupController: NSWindowController, NSWindowDelegate {
 
     private let defaults: UserDefaults
     private let autoPastePermissionGuide: any AutoPastePermissionGuiding
+    private let model: FirstLaunchSetupModel
 
     init(
         defaults: UserDefaults = .standard,
@@ -123,6 +177,11 @@ final class FirstLaunchSetupController: NSWindowController, NSWindowDelegate {
     ) {
         self.defaults = defaults
         self.autoPastePermissionGuide = autoPastePermissionGuide
+        let model = FirstLaunchSetupModel(permissionState: autoPastePermissionGuide.permissionState)
+        self.model = model
+        autoPastePermissionGuide.setPermissionStateHandler { [weak model] state in
+            model?.permissionState = state
+        }
 
         let window = NSWindow()
         window.title = content.title
@@ -131,8 +190,10 @@ final class FirstLaunchSetupController: NSWindowController, NSWindowDelegate {
         window.contentViewController = NSHostingController(
             rootView: FirstLaunchSetupView(
                 content: content,
+                model: model,
                 openSettings: { _ = settingsOpener.open() },
                 enableAutoPaste: { autoPastePermissionGuide.requestPermissionFromSetup() },
+                restartAutoPaste: { autoPastePermissionGuide.restartFromSetup() },
                 dismiss: { [weak window] in window?.close() }
             )
         )
@@ -157,6 +218,7 @@ final class FirstLaunchSetupController: NSWindowController, NSWindowDelegate {
     }
 
     func show() {
+        autoPastePermissionGuide.setSetupGuideVisible(true)
         showWindow(nil)
         window?.center()
         NSApplication.shared.activate(ignoringOtherApps: true)
@@ -164,6 +226,7 @@ final class FirstLaunchSetupController: NSWindowController, NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) {
+        autoPastePermissionGuide.setSetupGuideVisible(false)
         NSApplication.shared.setActivationPolicy(.accessory)
     }
 }

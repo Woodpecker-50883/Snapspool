@@ -46,6 +46,9 @@
 "setup.manual-settings-path" = "If System Settings does not open, go to System Settings > Keyboard > Keyboard Shortcuts > Screenshots.";
 "setup.open-settings" = "Open Keyboard Shortcuts…";
 "setup.enable-auto-paste" = "Enable Automatic Paste…";
+"setup.permission-status-unauthorized" = "Automatic paste access: Not allowed";
+"setup.permission-status-restart-required" = "Automatic paste access: Allowed — restart Snapspool to activate it";
+"setup.permission-status-active" = "Automatic paste access: Active";
 "setup.done" = "Done";
 
 "notification.destination-save-failed" = "The image could not be written to the destination, so it was saved in temporary history storage.";

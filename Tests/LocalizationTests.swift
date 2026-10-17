@@ -72,6 +72,18 @@ final class LocalizationTests: XCTestCase {
         ),
         "setup.open-settings": ("Open Keyboard Shortcuts…", "キーボードショートカットを開く…"),
         "setup.enable-auto-paste": ("Enable Automatic Paste…", "自動貼り付けを有効にする…"),
+        "setup.permission-status-unauthorized": (
+            "Automatic paste access: Not allowed",
+            "自動貼り付けの権限：未許可"
+        ),
+        "setup.permission-status-restart-required": (
+            "Automatic paste access: Allowed — restart Snapspool to activate it",
+            "自動貼り付けの権限：許可済み（有効化にはSnapspoolの再起動が必要です）"
+        ),
+        "setup.permission-status-active": (
+            "Automatic paste access: Active",
+            "自動貼り付けの権限：有効"
+        ),
         "setup.done": ("Done", "完了"),
         "notification.destination-save-failed": (
             "The image could not be written to the destination, so it was saved in temporary history storage.",

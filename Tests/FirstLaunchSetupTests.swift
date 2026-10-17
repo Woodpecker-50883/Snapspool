@@ -42,6 +42,9 @@ final class FirstLaunchSetupTests: XCTestCase {
         XCTAssertTrue(english.emptyHistoryRestartNote.contains("Screenshot Setup Guide"))
         XCTAssertEqual(english.openSettingsButtonTitle, "Open Keyboard Shortcuts…")
         XCTAssertEqual(english.enableAutoPasteButtonTitle, "Enable Automatic Paste…")
+        XCTAssertEqual(english.permissionUnauthorizedStatus, "Automatic paste access: Not allowed")
+        XCTAssertTrue(english.permissionRestartRequiredStatus.contains("restart Snapspool"))
+        XCTAssertEqual(english.permissionActiveStatus, "Automatic paste access: Active")
         XCTAssertTrue(english.manualSettingsPath.contains("System Settings > Keyboard > Keyboard Shortcuts > Screenshots"))
 
         XCTAssertTrue(japanese.introduction.contains("スクリーンショットをクリップボードにコピー"))
@@ -55,6 +58,9 @@ final class FirstLaunchSetupTests: XCTestCase {
         XCTAssertTrue(japanese.emptyHistoryRestartNote.contains("スクリーンショットの設定"))
         XCTAssertEqual(japanese.openSettingsButtonTitle, "キーボードショートカットを開く…")
         XCTAssertEqual(japanese.enableAutoPasteButtonTitle, "自動貼り付けを有効にする…")
+        XCTAssertEqual(japanese.permissionUnauthorizedStatus, "自動貼り付けの権限：未許可")
+        XCTAssertTrue(japanese.permissionRestartRequiredStatus.contains("再起動が必要"))
+        XCTAssertEqual(japanese.permissionActiveStatus, "自動貼り付けの権限：有効")
         XCTAssertTrue(japanese.manualSettingsPath.contains("システム設定 > キーボード > キーボードショートカット > スクリーンショット"))
     }
 
@@ -90,7 +96,7 @@ final class FirstLaunchSetupTests: XCTestCase {
         XCTAssertEqual(openedURL, SystemKeyboardShortcutSettingsOpener.settingsURL)
     }
 
-    func testSetupPermissionActionRequestsOSAccessAndCompletesRestartFlow() throws {
+    func testSetupWindowTracksPermissionAndCompletesRestartWithoutModalAlerts() throws {
         let (defaults, suiteName) = makeIsolatedDefaults()
         defer { defaults.removePersistentDomain(forName: suiteName) }
         var scheduledPermissionRecheck: (@MainActor () -> Void)?
@@ -129,21 +135,85 @@ final class FirstLaunchSetupTests: XCTestCase {
         let hostingController = try XCTUnwrap(
             controller.window?.contentViewController as? NSHostingController<FirstLaunchSetupView>
         )
+        controller.show()
+
+        XCTAssertEqual(hostingController.rootView.model.permissionState, .unauthorized)
+        XCTAssertFalse(hostingController.rootView.showsRestartButton)
 
         hostingController.rootView.enableAutoPaste()
 
         XCTAssertEqual(permissionRequestCount, 1)
         XCTAssertEqual(openedURL, SystemAutoPasteNotifier.accessibilitySettingsURL)
-        XCTAssertEqual(displayedAlerts.count, 1)
+        XCTAssertTrue(displayedAlerts.isEmpty)
 
         scheduledPermissionRecheck?()
 
-        XCTAssertEqual(displayedAlerts.count, 2)
-        XCTAssertEqual(
-            displayedAlerts.last?.buttons.map(\.title),
-            [L10n.string("autopaste.restart"), L10n.string("autopaste.not-now")]
-        )
+        XCTAssertEqual(hostingController.rootView.model.permissionState, .restartRequired)
+        XCTAssertTrue(hostingController.rootView.showsRestartButton)
+        XCTAssertTrue(displayedAlerts.isEmpty)
+
+        hostingController.rootView.restartAutoPaste()
         XCTAssertEqual(relaunchSequence, ["prepare", "launch", "terminate"])
+    }
+
+    func testSetupWindowAutomaticallyReflectsGrantedPermissionAndSuppressesFallbackModal() throws {
+        var scheduledPermissionRechecks: [(@MainActor () -> Void)] = []
+        var isAuthorized = false
+        var displayedAlerts: [NSAlert] = []
+        let notifier = SystemAutoPasteNotifier(
+            openURL: { _ in true },
+            runAlert: {
+                displayedAlerts.append($0)
+                return .alertFirstButtonReturn
+            },
+            requestAuthorization: { $0(false) },
+            isAuthorized: { isAuthorized },
+            isApplicationActive: { false },
+            schedulePermissionRecheck: { _, recheck in scheduledPermissionRechecks.append(recheck) }
+        )
+        let controller = FirstLaunchSetupController(autoPastePermissionGuide: notifier)
+        let hostingController = try XCTUnwrap(
+            controller.window?.contentViewController as? NSHostingController<FirstLaunchSetupView>
+        )
+        controller.show()
+        hostingController.rootView.enableAutoPaste()
+
+        notifier.notifyManualPasteRequired()
+        XCTAssertTrue(displayedAlerts.isEmpty)
+
+        isAuthorized = true
+        scheduledPermissionRechecks.removeFirst()()
+
+        XCTAssertEqual(hostingController.rootView.model.permissionState, .active)
+        XCTAssertFalse(hostingController.rootView.showsRestartButton)
+        XCTAssertEqual(
+            hostingController.rootView.permissionStatusText,
+            hostingController.rootView.content.permissionActiveStatus
+        )
+        XCTAssertTrue(displayedAlerts.isEmpty)
+    }
+
+    func testOpenSetupWindowRefreshesPermissionWithoutAnotherUserAction() throws {
+        var scheduledPermissionRechecks: [(@MainActor () -> Void)] = []
+        var isAuthorized = false
+        let notifier = SystemAutoPasteNotifier(
+            isAuthorized: { isAuthorized },
+            schedulePermissionRecheck: { _, recheck in scheduledPermissionRechecks.append(recheck) }
+        )
+        let controller = FirstLaunchSetupController(autoPastePermissionGuide: notifier)
+        let hostingController = try XCTUnwrap(
+            controller.window?.contentViewController as? NSHostingController<FirstLaunchSetupView>
+        )
+
+        controller.show()
+        XCTAssertEqual(hostingController.rootView.model.permissionState, .unauthorized)
+        XCTAssertEqual(scheduledPermissionRechecks.count, 1)
+
+        isAuthorized = true
+        scheduledPermissionRechecks.removeFirst()()
+
+        XCTAssertEqual(hostingController.rootView.model.permissionState, .active)
+        XCTAssertEqual(scheduledPermissionRechecks.count, 1)
     }
 
     private func builtAppURL() throws -> URL {

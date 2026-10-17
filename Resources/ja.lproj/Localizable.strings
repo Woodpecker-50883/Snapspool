@@ -46,6 +46,9 @@
 "setup.manual-settings-path" = "システム設定が開かない場合は、システム設定 > キーボード > キーボードショートカット > スクリーンショット の順に開いてください。";
 "setup.open-settings" = "キーボードショートカットを開く…";
 "setup.enable-auto-paste" = "自動貼り付けを有効にする…";
+"setup.permission-status-unauthorized" = "自動貼り付けの権限：未許可";
+"setup.permission-status-restart-required" = "自動貼り付けの権限：許可済み（有効化にはSnapspoolの再起動が必要です）";
+"setup.permission-status-active" = "自動貼り付けの権限：有効";
 "setup.done" = "完了";
 
 "notification.destination-save-failed" = "画像を保存先へ書き込めなかったため、履歴用の退避領域に保存しました。";
