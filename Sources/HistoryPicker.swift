@@ -160,7 +160,7 @@ enum HistoryThumbnail {
 enum HistoryPickerLayout {
     static let width: CGFloat = 420
     static let maximumHeight: CGFloat = 480
-    static let maximumThumbnailPointLength: CGFloat = 56
+    static let thumbnailAreaSize = NSSize(width: 256, height: 80)
 
     private static let headerHeight: CGFloat = 61
     private static let footerHeight: CGFloat = 37
@@ -199,10 +199,14 @@ enum HistoryPickerLayout {
         }
 
         guard pixelSize.width > 0, pixelSize.height > 0 else { return .zero }
-        let maximumPixelLengthAtScale = maximumThumbnailPointLength * scaleFactor
+        let maximumPixelSizeAtScale = NSSize(
+            width: thumbnailAreaSize.width * scaleFactor,
+            height: thumbnailAreaSize.height * scaleFactor
+        )
         let fitScale = min(
             1,
-            maximumPixelLengthAtScale / max(pixelSize.width, pixelSize.height)
+            maximumPixelSizeAtScale.width / pixelSize.width,
+            maximumPixelSizeAtScale.height / pixelSize.height
         )
         return NSSize(
             width: pixelSize.width * fitScale / scaleFactor,
@@ -242,10 +246,10 @@ enum HistoryPickerLayout {
         case .text:
             return textRowHeight
         case .image:
-            guard let thumbnail = thumbnails[entry.id] else {
+            guard thumbnails[entry.id] != nil else {
                 return missingImageRowHeight
             }
-            return min(maximumThumbnailPointLength, thumbnail.size.height) + rowVerticalPadding
+            return thumbnailAreaSize.height + rowVerticalPadding
         }
     }
 }
@@ -341,6 +345,11 @@ struct HistoryPickerView: View {
                             .resizable()
                             .scaledToFit()
                             .frame(width: displaySize.width, height: displaySize.height)
+                            .frame(
+                                width: HistoryPickerLayout.thumbnailAreaSize.width,
+                                height: HistoryPickerLayout.thumbnailAreaSize.height,
+                                alignment: .leading
+                            )
                     } else {
                         Image(systemName: "photo")
                             .frame(width: 48, height: 48)

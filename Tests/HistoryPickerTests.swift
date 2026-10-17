@@ -197,9 +197,9 @@ final class HistoryPickerTests: XCTestCase {
         XCTAssertEqual(HistoryPickerLayout.contentSize(for: model).height, 480)
     }
 
-    func testFiveImageRowsFitCompletelyWithinMaximumPickerHeight() {
+    func testFourImageRowsFitCompletelyWithinMaximumPickerHeight() {
         let thumbnail = makeThumbnail(pixelsWide: 256, pixelsHigh: 256)
-        let entries = (0..<5).map { index in
+        let entries = (0..<4).map { index in
             HistoryEntry(
                 content: .image(ImageHistoryEntry(
                     fileURL: URL(fileURLWithPath: "/tmp/image-\(index).png"),
@@ -211,9 +211,16 @@ final class HistoryPickerTests: XCTestCase {
         }
         let model = HistoryPickerModel(entries: entries)
 
-        XCTAssertLessThan(
+        XCTAssertLessThanOrEqual(
             HistoryPickerLayout.contentSize(for: model).height,
             HistoryPickerLayout.maximumHeight
+        )
+    }
+
+    func testThumbnailAreaUsesAtLeastHalfOfPickerWidth() {
+        XCTAssertGreaterThanOrEqual(
+            HistoryPickerLayout.thumbnailAreaSize.width,
+            HistoryPickerLayout.width / 2
         )
     }
 
@@ -311,10 +318,8 @@ final class HistoryPickerTests: XCTestCase {
         XCTAssertLessThanOrEqual(displaySize.width * 2, 256)
         XCTAssertLessThanOrEqual(displaySize.height * 2, 128)
         XCTAssertEqual(displaySize.width / displaySize.height, 2, accuracy: 0.001)
-        XCTAssertLessThanOrEqual(
-            max(displaySize.width, displaySize.height),
-            HistoryPickerLayout.maximumThumbnailPointLength
-        )
+        XCTAssertLessThanOrEqual(displaySize.width, HistoryPickerLayout.thumbnailAreaSize.width)
+        XCTAssertLessThanOrEqual(displaySize.height, HistoryPickerLayout.thumbnailAreaSize.height)
     }
 
     func testSmallThumbnailIsNotUpscaledBeyondItsGeneratedPixels() {
