@@ -197,8 +197,8 @@ final class HistoryPickerTests: XCTestCase {
         XCTAssertEqual(HistoryPickerLayout.contentSize(for: model).height, 480)
     }
 
-    func testFourImageRowsFitCompletelyWithinMaximumPickerHeight() {
-        let thumbnail = makeThumbnail(pixelsWide: 256, pixelsHigh: 256)
+    func testFourImagesFitCompletelyWithinMaximumPickerHeightInTwoRows() {
+        let thumbnail = makeThumbnail(pixelsWide: 512, pixelsHigh: 384)
         let entries = (0..<4).map { index in
             HistoryEntry(
                 content: .image(ImageHistoryEntry(
@@ -216,9 +216,10 @@ final class HistoryPickerTests: XCTestCase {
         XCTAssertLessThanOrEqual(
             requiredHeight,
             HistoryPickerLayout.availableListHeight,
-            "All four image rows, their spacing, and list padding must fit without scrolling"
+            "All four images, their two rows, spacing, and padding must fit without scrolling"
         )
         XCTAssertEqual(HistoryPickerLayout.listHeight(for: model), requiredHeight)
+        XCTAssertEqual(HistoryPickerLayout.layoutRows(for: entries).map(\.count), [2, 2])
     }
 
     func testThumbnailAreaUsesAtLeastHalfOfPickerWidth() {
@@ -226,6 +227,41 @@ final class HistoryPickerTests: XCTestCase {
             HistoryPickerLayout.thumbnailAreaSize.width,
             HistoryPickerLayout.width / 2
         )
+    }
+
+    func testImagePairingPreservesDetectionOrderAroundTextRows() {
+        let firstImage = HistoryEntry(
+            content: .image(ImageHistoryEntry(
+                fileURL: URL(fileURLWithPath: "/tmp/first.png"),
+                isFallback: false
+            )),
+            detectionOrder: 3
+        )
+        let secondImage = HistoryEntry(
+            content: .image(ImageHistoryEntry(
+                fileURL: URL(fileURLWithPath: "/tmp/second.png"),
+                isFallback: false
+            )),
+            detectionOrder: 2
+        )
+        let text = HistoryEntry(content: .text(Data("text".utf8)), detectionOrder: 1)
+        let thirdImage = HistoryEntry(
+            content: .image(ImageHistoryEntry(
+                fileURL: URL(fileURLWithPath: "/tmp/third.png"),
+                isFallback: false
+            )),
+            detectionOrder: 0
+        )
+
+        let rows = HistoryPickerLayout.layoutRows(
+            for: [firstImage, secondImage, text, thirdImage]
+        )
+
+        XCTAssertEqual(rows.map { $0.map(\.id) }, [
+            [firstImage.id, secondImage.id],
+            [text.id],
+            [thirdImage.id],
+        ])
     }
 
     func testControllerResizesPanelFromCurrentStoreContentsBeforeShowing() {
@@ -319,20 +355,48 @@ final class HistoryPickerTests: XCTestCase {
         XCTAssertEqual(displaySize.width / displaySize.height, 4, accuracy: 0.001)
     }
 
-    func testThumbnailImageUsesAtLeastHalfOfPickerWidthOnRetinaDisplay() {
-        let thumbnail = makeThumbnail(pixelsWide: 512, pixelsHigh: 128)
+    func testCommonLandscapeThumbnailRatiosUseAtLeastHalfOfPickerWidthOnRetinaDisplay() {
+        let pixelSizes = [
+            NSSize(width: 512, height: 288), // 16:9
+            NSSize(width: 512, height: 384), // 4:3 boundary
+        ]
+
+        for pixelSize in pixelSizes {
+            let thumbnail = makeThumbnail(
+                pixelsWide: Int(pixelSize.width),
+                pixelsHigh: Int(pixelSize.height)
+            )
+            let displaySize = HistoryPickerLayout.thumbnailDisplaySize(
+                for: thumbnail,
+                backingScaleFactor: 2
+            )
+
+            XCTAssertGreaterThanOrEqual(displaySize.width, HistoryPickerLayout.width / 2)
+            XCTAssertLessThanOrEqual(displaySize.width * 2, pixelSize.width)
+            XCTAssertLessThanOrEqual(displaySize.height * 2, pixelSize.height)
+            XCTAssertEqual(
+                displaySize.width / displaySize.height,
+                pixelSize.width / pixelSize.height,
+                accuracy: 0.001
+            )
+            XCTAssertLessThanOrEqual(displaySize.width, HistoryPickerLayout.thumbnailAreaSize.width)
+            XCTAssertLessThanOrEqual(displaySize.height, HistoryPickerLayout.thumbnailAreaSize.height)
+        }
+    }
+
+    func testRatioJustNarrowerThanFourByThreeIsHeightLimitedWithoutCropping() {
+        let thumbnail = makeThumbnail(pixelsWide: 511, pixelsHigh: 384)
 
         let displaySize = HistoryPickerLayout.thumbnailDisplaySize(
             for: thumbnail,
             backingScaleFactor: 2
         )
 
-        XCTAssertGreaterThanOrEqual(displaySize.width, HistoryPickerLayout.width / 2)
-        XCTAssertLessThanOrEqual(displaySize.width * 2, 512)
-        XCTAssertLessThanOrEqual(displaySize.height * 2, 128)
-        XCTAssertEqual(displaySize.width / displaySize.height, 4, accuracy: 0.001)
-        XCTAssertLessThanOrEqual(displaySize.width, HistoryPickerLayout.thumbnailAreaSize.width)
-        XCTAssertLessThanOrEqual(displaySize.height, HistoryPickerLayout.thumbnailAreaSize.height)
+        XCTAssertLessThan(displaySize.width, HistoryPickerLayout.width / 2)
+        XCTAssertEqual(displaySize.height, HistoryPickerLayout.thumbnailAreaSize.height)
+        XCTAssertLessThanOrEqual(displaySize.width * 2, 511)
+        XCTAssertLessThanOrEqual(displaySize.height * 2, 384)
+        XCTAssertEqual(displaySize.width / displaySize.height, 511.0 / 384.0, accuracy: 0.001)
     }
 
     func testSmallThumbnailIsNotUpscaledBeyondItsGeneratedPixels() {

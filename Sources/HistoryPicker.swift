@@ -113,8 +113,8 @@ struct HistoryThumbnailGenerator: @unchecked Sendable {
 }
 
 enum HistoryThumbnail {
-    // The picker reserves up to 256 points horizontally. Generate enough
-    // pixels for that width to remain sharp on a 2x Retina display.
+    // Keep enough pixels for the half-width thumbnail cell on a 2x Retina
+    // display, with some headroom for future layout changes.
     static let maximumPixelLength = 512
 
     static func make(from fileURL: URL) -> NSImage? {
@@ -162,7 +162,10 @@ enum HistoryThumbnail {
 enum HistoryPickerLayout {
     static let width: CGFloat = 420
     static let maximumHeight: CGFloat = 480
-    static let thumbnailAreaSize = NSSize(width: 256, height: 80)
+    // Two cells exactly fill the picker width.  A 4:3 (or wider) thumbnail can
+    // therefore use half of the picker width without being cropped, while two
+    // rows (four images) still fit in a 480-point picker.
+    static let thumbnailAreaSize = NSSize(width: width / 2, height: width * 3 / 8)
 
     private static let headerHeight: CGFloat = 61
     private static let footerHeight: CGFloat = 37
@@ -233,25 +236,46 @@ enum HistoryPickerLayout {
     static func requiredListHeight(for model: HistoryPickerModel) -> CGFloat {
         guard !model.entries.isEmpty else { return emptyListHeight }
 
-        let rowsHeight = model.entries.reduce(CGFloat.zero) { height, entry in
-            height + rowHeight(for: entry, thumbnails: model.thumbnails)
+        let rows = layoutRows(for: model.entries)
+        let rowsHeight = rows.reduce(CGFloat.zero) { height, row in
+            height + rowHeight(for: row, thumbnails: model.thumbnails)
         }
-        let spacing = rowSpacing * CGFloat(max(0, model.entries.count - 1))
+        let spacing = rowSpacing * CGFloat(max(0, rows.count - 1))
         return verticalListPadding + rowsHeight + spacing
     }
 
+    // Pair only adjacent images. This keeps the history's detection order
+    // intact when image and text entries are interleaved.
+    static func layoutRows(for entries: [HistoryEntry]) -> [[HistoryEntry]] {
+        var rows: [[HistoryEntry]] = []
+        for entry in entries {
+            if case .image = entry.content,
+               let lastRow = rows.last,
+               lastRow.count == 1,
+               case .image = lastRow[0].content {
+                rows[rows.count - 1].append(entry)
+            } else {
+                rows.append([entry])
+            }
+        }
+        return rows
+    }
+
     private static func rowHeight(
-        for entry: HistoryEntry,
+        for row: [HistoryEntry],
         thumbnails: [UUID: NSImage]
     ) -> CGFloat {
-        switch entry.content {
-        case .text:
-            return textRowHeight
-        case .image:
-            guard thumbnails[entry.id] != nil else {
-                return missingImageRowHeight
+        row.reduce(CGFloat.zero) { height, entry in
+            let entryHeight: CGFloat
+            switch entry.content {
+            case .text:
+                entryHeight = textRowHeight
+            case .image:
+                entryHeight = thumbnails[entry.id] == nil
+                    ? missingImageRowHeight
+                    : thumbnailAreaSize.height + rowVerticalPadding
             }
-            return thumbnailAreaSize.height + rowVerticalPadding
+            return max(height, entryHeight)
         }
     }
 }
@@ -286,12 +310,25 @@ struct HistoryPickerView: View {
                     ScrollViewReader { proxy in
                         ScrollView {
                             LazyVStack(spacing: 4) {
-                                ForEach(model.entries) { entry in
-                                    row(for: entry)
-                                        .id(entry.id)
+                                ForEach(
+                                    Array(HistoryPickerLayout.layoutRows(for: model.entries).enumerated()),
+                                    id: \.offset
+                                ) { _, entries in
+                                    HStack(spacing: 0) {
+                                        ForEach(entries) { entry in
+                                            row(for: entry)
+                                                .frame(
+                                                    width: entries.count > 1
+                                                        ? HistoryPickerLayout.thumbnailAreaSize.width
+                                                        : nil
+                                                )
+                                                .id(entry.id)
+                                        }
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
                                 }
                             }
-                            .padding(8)
+                            .padding(.vertical, 8)
                         }
                         .onChange(of: model.selectedID) { _, selectedID in
                             if let selectedID {
@@ -362,7 +399,7 @@ struct HistoryPickerView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-            .padding(.horizontal, 8)
+            .padding(.horizontal, isImage(entry) ? 0 : 8)
             .padding(.vertical, 4)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
@@ -374,6 +411,11 @@ struct HistoryPickerView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+
+    private func isImage(_ entry: HistoryEntry) -> Bool {
+        if case .image = entry.content { return true }
+        return false
     }
 }
 
