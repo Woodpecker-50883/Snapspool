@@ -38,6 +38,45 @@ final class AutoPasteTests: XCTestCase {
         XCTAssertEqual(log.calls, ["authorize", "notify"])
     }
 
+    func testFirstPasteDoesNotShowFallbackWhileSystemPermissionDialogIsOpen() {
+        let log = AutoPasteCallLog()
+        let authorization = DeferredAuthorization(log: log)
+        let controller = AutoPasteController(
+            authorization: authorization,
+            eventSender: LoggedEventSender(log: log),
+            notifier: LoggedAutoPasteNotifier(log: log),
+            targetApplicationProvider: LoggedTargetApplicationProvider(
+                application: LoggedTargetApplication(name: "target", log: log)
+            )
+        )
+
+        controller.captureTargetApplication()
+        controller.pasteIfEnabled(true)
+        XCTAssertEqual(log.calls, ["authorize"])
+
+        authorization.finish(isAuthorized: false)
+        XCTAssertEqual(log.calls, ["authorize", "notify"])
+    }
+
+    func testFirstPasteContinuesWithoutFallbackWhenSystemDialogGrantsAccess() {
+        let log = AutoPasteCallLog()
+        let authorization = DeferredAuthorization(log: log)
+        let controller = AutoPasteController(
+            authorization: authorization,
+            eventSender: LoggedEventSender(log: log),
+            notifier: LoggedAutoPasteNotifier(log: log),
+            targetApplicationProvider: LoggedTargetApplicationProvider(
+                application: LoggedTargetApplication(name: "target", log: log)
+            )
+        )
+
+        controller.captureTargetApplication()
+        controller.pasteIfEnabled(true)
+        authorization.finish(isAuthorized: true)
+
+        XCTAssertEqual(log.calls, ["authorize", "activate:target", "send"])
+    }
+
     func testPermissionNoticeOffersAccessibilitySettingsAndOpensTheAccessibilityPane() {
         var openedURL: URL?
         var displayedAlert: NSAlert?
@@ -83,27 +122,106 @@ final class AutoPasteTests: XCTestCase {
         XCTAssertTrue(openedURLs.isEmpty)
     }
 
-    func testSetupPermissionRequestUsesSystemAuthorizationPathAndReportsSuccess() {
+    func testSetupPermissionRequestUsesSystemAuthorizationPathWithoutAnExtraSuccessDialog() {
         var requestCount = 0
-        var displayedAlert: NSAlert?
+        var displayedAlerts: [NSAlert] = []
         let notifier = SystemAutoPasteNotifier(
             runAlert: {
-                displayedAlert = $0
+                displayedAlerts.append($0)
                 return .alertFirstButtonReturn
             },
-            requestAuthorization: {
+            requestAuthorization: { completion in
                 requestCount += 1
-                return true
+                completion(true)
             }
         )
 
         notifier.requestPermissionFromSetup()
 
         XCTAssertEqual(requestCount, 1)
-        XCTAssertEqual(
-            displayedAlert?.messageText,
-            L10n.string("autopaste.permission-enabled-title")
+        XCTAssertTrue(displayedAlerts.isEmpty)
+    }
+
+    func testSetupDoesNotShowAppAlertUntilSystemPermissionDialogFinishesWithDenial() {
+        var finishSystemRequest: ((Bool) -> Void)?
+        var displayedAlerts: [NSAlert] = []
+        let notifier = SystemAutoPasteNotifier(
+            runAlert: {
+                displayedAlerts.append($0)
+                return .alertSecondButtonReturn
+            },
+            requestAuthorization: { finishSystemRequest = $0 }
         )
+
+        notifier.requestPermissionFromSetup()
+
+        XCTAssertTrue(displayedAlerts.isEmpty)
+        finishSystemRequest?(false)
+        XCTAssertEqual(displayedAlerts.count, 1)
+        XCTAssertEqual(
+            displayedAlerts.first?.messageText,
+            L10n.string("autopaste.permission-required-title")
+        )
+    }
+
+    func testSetupDoesNotShowAppAlertAfterSystemPermissionDialogGrantsAccess() {
+        var finishSystemRequest: ((Bool) -> Void)?
+        var displayedAlerts: [NSAlert] = []
+        let notifier = SystemAutoPasteNotifier(
+            runAlert: {
+                displayedAlerts.append($0)
+                return .alertFirstButtonReturn
+            },
+            requestAuthorization: { finishSystemRequest = $0 }
+        )
+
+        notifier.requestPermissionFromSetup()
+        XCTAssertTrue(displayedAlerts.isEmpty)
+
+        finishSystemRequest?(true)
+
+        XCTAssertTrue(displayedAlerts.isEmpty)
+    }
+
+    func testSystemAuthorizationWaitsForDialogToCloseBeforeReportingDenial() {
+        let notificationCenter = NotificationCenter()
+        var authorizationResult: Bool?
+        let authorization = SystemPasteEventAuthorization(
+            preflightAccess: { false },
+            requestSystemAccess: { false },
+            notificationCenter: notificationCenter
+        )
+
+        authorization.requestAccess { authorizationResult = $0 }
+        XCTAssertNil(authorizationResult)
+
+        notificationCenter.post(name: NSApplication.didBecomeActiveNotification, object: nil)
+        XCTAssertNil(authorizationResult, "An unrelated activation must not finish the request")
+
+        notificationCenter.post(name: NSApplication.didResignActiveNotification, object: nil)
+        XCTAssertNil(authorizationResult)
+
+        notificationCenter.post(name: NSApplication.didBecomeActiveNotification, object: nil)
+        XCTAssertEqual(authorizationResult, false)
+    }
+
+    func testSystemAuthorizationReportsGrantOnlyAfterDialogCloses() {
+        let notificationCenter = NotificationCenter()
+        var isAuthorized = false
+        var authorizationResult: Bool?
+        let authorization = SystemPasteEventAuthorization(
+            preflightAccess: { isAuthorized },
+            requestSystemAccess: { false },
+            notificationCenter: notificationCenter
+        )
+
+        authorization.requestAccess { authorizationResult = $0 }
+        notificationCenter.post(name: NSApplication.didResignActiveNotification, object: nil)
+        isAuthorized = true
+        XCTAssertNil(authorizationResult)
+
+        notificationCenter.post(name: NSApplication.didBecomeActiveNotification, object: nil)
+        XCTAssertEqual(authorizationResult, true)
     }
 
     func testReturningFromSettingsRechecksPermissionAndShowsThatAutoPasteIsReady() {
@@ -465,9 +583,30 @@ private struct LoggedAuthorization: PasteEventAuthorizing {
     let log: AutoPasteCallLog
     let result: Bool
 
-    func requestAccess() -> Bool {
+    func requestAccess(completion: @escaping (Bool) -> Void) {
         log.calls.append("authorize")
-        return result
+        completion(result)
+    }
+}
+
+@MainActor
+private final class DeferredAuthorization: PasteEventAuthorizing {
+    private let log: AutoPasteCallLog
+    private var completion: ((Bool) -> Void)?
+
+    init(log: AutoPasteCallLog) {
+        self.log = log
+    }
+
+    func requestAccess(completion: @escaping (Bool) -> Void) {
+        log.calls.append("authorize")
+        self.completion = completion
+    }
+
+    func finish(isAuthorized: Bool) {
+        let pendingCompletion = completion
+        completion = nil
+        pendingCompletion?(isAuthorized)
     }
 }
 

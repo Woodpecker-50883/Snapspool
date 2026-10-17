@@ -107,9 +107,9 @@ final class FirstLaunchSetupTests: XCTestCase {
                 displayedAlerts.append($0)
                 return .alertFirstButtonReturn
             },
-            requestAuthorization: {
+            requestAuthorization: { completion in
                 permissionRequestCount += 1
-                return false
+                completion(false)
             },
             isAuthorized: { false },
             notificationCenter: notificationCenter,

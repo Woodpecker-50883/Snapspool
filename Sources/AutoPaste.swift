@@ -4,13 +4,89 @@ import CoreGraphics
 
 @MainActor
 protocol PasteEventAuthorizing {
-    func requestAccess() -> Bool
+    func requestAccess(completion: @escaping (Bool) -> Void)
 }
 
 @MainActor
-struct SystemPasteEventAuthorization: PasteEventAuthorizing {
-    func requestAccess() -> Bool {
-        CGPreflightPostEventAccess() || CGRequestPostEventAccess()
+final class SystemPasteEventAuthorization: PasteEventAuthorizing {
+    static let shared = SystemPasteEventAuthorization()
+
+    private let preflightAccess: () -> Bool
+    private let requestSystemAccess: () -> Bool
+    private let notificationCenter: NotificationCenter
+    private var completions: [(Bool) -> Void] = []
+    private var isWaitingForSystemDialog = false
+    private var didResignWhileWaiting = false
+
+    init(
+        preflightAccess: @escaping () -> Bool = { CGPreflightPostEventAccess() },
+        requestSystemAccess: @escaping () -> Bool = { CGRequestPostEventAccess() },
+        notificationCenter: NotificationCenter = .default
+    ) {
+        self.preflightAccess = preflightAccess
+        self.requestSystemAccess = requestSystemAccess
+        self.notificationCenter = notificationCenter
+    }
+
+    deinit {
+        notificationCenter.removeObserver(self)
+    }
+
+    func requestAccess(completion: @escaping (Bool) -> Void) {
+        if preflightAccess() {
+            completion(true)
+            return
+        }
+
+        completions.append(completion)
+        guard !isWaitingForSystemDialog else { return }
+
+        isWaitingForSystemDialog = true
+        didResignWhileWaiting = false
+        notificationCenter.addObserver(
+            self,
+            selector: #selector(applicationDidResignWhileRequestingAccess),
+            name: NSApplication.didResignActiveNotification,
+            object: nil
+        )
+        notificationCenter.addObserver(
+            self,
+            selector: #selector(applicationDidReturnAfterRequestingAccess),
+            name: NSApplication.didBecomeActiveNotification,
+            object: nil
+        )
+
+        if requestSystemAccess() {
+            finishRequest(isAuthorized: true)
+        }
+    }
+
+    @objc private func applicationDidResignWhileRequestingAccess() {
+        guard isWaitingForSystemDialog else { return }
+        didResignWhileWaiting = true
+    }
+
+    @objc private func applicationDidReturnAfterRequestingAccess() {
+        guard isWaitingForSystemDialog, didResignWhileWaiting else { return }
+        finishRequest(isAuthorized: preflightAccess())
+    }
+
+    private func finishRequest(isAuthorized: Bool) {
+        isWaitingForSystemDialog = false
+        didResignWhileWaiting = false
+        notificationCenter.removeObserver(
+            self,
+            name: NSApplication.didResignActiveNotification,
+            object: nil
+        )
+        notificationCenter.removeObserver(
+            self,
+            name: NSApplication.didBecomeActiveNotification,
+            object: nil
+        )
+        let pendingCompletions = completions
+        completions.removeAll()
+        pendingCompletions.forEach { $0(isAuthorized) }
     }
 }
 
@@ -115,7 +191,7 @@ final class SystemAutoPasteNotifier: NSObject, AutoPasteNotifying, AutoPastePerm
 
     private let openURL: (URL) -> Bool
     private let runAlert: (NSAlert) -> NSApplication.ModalResponse
-    private let requestAuthorization: () -> Bool
+    private let requestAuthorization: (@escaping (Bool) -> Void) -> Void
     private let isAuthorized: () -> Bool
     private let notificationCenter: NotificationCenter
     private let defaults: UserDefaults
@@ -129,8 +205,8 @@ final class SystemAutoPasteNotifier: NSObject, AutoPasteNotifying, AutoPastePerm
     init(
         openURL: @escaping (URL) -> Bool = { NSWorkspace.shared.open($0) },
         runAlert: @escaping (NSAlert) -> NSApplication.ModalResponse = { $0.runModal() },
-        requestAuthorization: @escaping () -> Bool = {
-            CGPreflightPostEventAccess() || CGRequestPostEventAccess()
+        requestAuthorization: @escaping (@escaping (Bool) -> Void) -> Void = { completion in
+            SystemPasteEventAuthorization.shared.requestAccess(completion: completion)
         },
         isAuthorized: @escaping () -> Bool = { CGPreflightPostEventAccess() },
         notificationCenter: NotificationCenter = .default,
@@ -184,9 +260,8 @@ final class SystemAutoPasteNotifier: NSObject, AutoPasteNotifying, AutoPastePerm
     }
 
     func requestPermissionFromSetup() {
-        if requestAuthorization() {
-            showPermissionEnabledAlert()
-        } else {
+        requestAuthorization { [weak self] isAuthorized in
+            guard let self, !isAuthorized else { return }
             notifyManualPasteRequired()
         }
     }
@@ -307,13 +382,16 @@ final class AutoPasteController {
             targetApplication = nil
             return
         }
-        defer { targetApplication = nil }
-        guard authorization.requestAccess(),
-              let targetApplication,
-              targetApplication.activateForPaste(),
-              eventSender.sendPasteShortcut() else {
-            notifier.notifyManualPasteRequired()
-            return
+        authorization.requestAccess { [weak self] isAuthorized in
+            guard let self else { return }
+            defer { targetApplication = nil }
+            guard isAuthorized,
+                  let targetApplication,
+                  targetApplication.activateForPaste(),
+                  eventSender.sendPasteShortcut() else {
+                notifier.notifyManualPasteRequired()
+                return
+            }
         }
     }
 }
