@@ -49,7 +49,20 @@ public final class SnapspoolRuntime {
             textLimit: settings.textLimit,
             imageIngestionService: imageService
         )
-        let pickerController = HistoryPickerController(historyStore: historyStore, settings: settings)
+        var hotKeyControllerForRelaunch: GlobalHotKeyController?
+        let autoPasteNotifier = SystemAutoPasteNotifier(
+            prepareForRelaunch: {
+                hotKeyControllerForRelaunch?.stop()
+            },
+            recoverFromFailedRelaunch: {
+                _ = hotKeyControllerForRelaunch?.start()
+            }
+        )
+        let pickerController = HistoryPickerController(
+            historyStore: historyStore,
+            settings: settings,
+            autoPasteController: AutoPasteController(notifier: autoPasteNotifier)
+        )
         let settingsWindowController = SettingsWindowController(settings: settings)
         let monitoringState = MonitoringState()
         let clipboardMonitor = ClipboardMonitor(
@@ -76,6 +89,7 @@ public final class SnapspoolRuntime {
             configuredShortcut: settings.shortcut,
             showHistoryPicker: openHistoryPicker
         )
+        hotKeyControllerForRelaunch = globalHotKeyController
         settings.connect(
             historyStore: historyStore,
             hotKeyController: globalHotKeyController,

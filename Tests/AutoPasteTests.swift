@@ -1,4 +1,5 @@
 import AppKit
+import Carbon.HIToolbox
 import CoreGraphics
 import XCTest
 @testable import Snapspool
@@ -125,6 +126,7 @@ final class AutoPasteTests: XCTestCase {
         let applicationURL = URL(fileURLWithPath: "/Applications/Snapspool.app")
         var relaunchedURLs: [URL] = []
         var terminationCount = 0
+        var relaunchSequence: [String] = []
         var displayedAlerts: [NSAlert] = []
         let notifier = SystemAutoPasteNotifier(
             openURL: { _ in true },
@@ -136,11 +138,17 @@ final class AutoPasteTests: XCTestCase {
             notificationCenter: notificationCenter,
             defaults: defaults,
             applicationURL: applicationURL,
-            relaunchApplication: {
-                relaunchedURLs.append($0)
+            prepareForRelaunch: { relaunchSequence.append("unregister") },
+            relaunchApplication: { url in
+                relaunchSequence.append("launch")
+                relaunchedURLs.append(url)
                 return true
             },
-            terminateCurrentApplication: { terminationCount += 1 }
+            recoverFromFailedRelaunch: { relaunchSequence.append("recover") },
+            terminateCurrentApplication: {
+                relaunchSequence.append("terminate")
+                terminationCount += 1
+            }
         )
 
         notifier.notifyManualPasteRequired()
@@ -153,6 +161,7 @@ final class AutoPasteTests: XCTestCase {
         )
         XCTAssertEqual(relaunchedURLs, [applicationURL])
         XCTAssertEqual(terminationCount, 1)
+        XCTAssertEqual(relaunchSequence, ["unregister", "launch", "terminate"])
     }
 
     func testRelaunchedInstanceRechecksPermissionAndShowsThatAutoPasteIsReady() {
@@ -225,6 +234,7 @@ final class AutoPasteTests: XCTestCase {
         let notificationCenter = NotificationCenter()
         var displayedAlerts: [NSAlert] = []
         var terminationCount = 0
+        var relaunchSequence: [String] = []
         let notifier = SystemAutoPasteNotifier(
             openURL: { _ in true },
             runAlert: {
@@ -234,7 +244,12 @@ final class AutoPasteTests: XCTestCase {
             isAuthorized: { false },
             notificationCenter: notificationCenter,
             defaults: defaults,
-            relaunchApplication: { _ in false },
+            prepareForRelaunch: { relaunchSequence.append("unregister") },
+            relaunchApplication: { _ in
+                relaunchSequence.append("launch")
+                return false
+            },
+            recoverFromFailedRelaunch: { relaunchSequence.append("recover") },
             terminateCurrentApplication: { terminationCount += 1 }
         )
 
@@ -251,6 +266,60 @@ final class AutoPasteTests: XCTestCase {
             L10n.string("autopaste.restart-failed-message")
         )
         XCTAssertEqual(terminationCount, 0)
+        XCTAssertEqual(relaunchSequence, ["unregister", "launch", "recover"])
+    }
+
+    func testRelaunchReleasesOldRegistrationBeforeNewInstanceUsesConfiguredShortcut() {
+        let suiteName = "AutoPasteTests.hotKeyHandoff.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let notificationCenter = NotificationCenter()
+        let shortcut = GlobalShortcut(
+            keyCode: UInt32(kVK_ANSI_B),
+            modifiers: UInt32(controlKey)
+        )
+        let sharedRegistration = ExclusiveHotKeyRegistration()
+        var oldPickerCount = 0
+        let oldController = GlobalHotKeyController(
+            registrar: ExclusiveHotKeyRegistrar(registration: sharedRegistration),
+            configuredShortcut: shortcut,
+            showHistoryPicker: { oldPickerCount += 1 }
+        )
+        XCTAssertTrue(oldController.start())
+
+        var newController: GlobalHotKeyController?
+        var newPickerCount = 0
+        var terminationCount = 0
+        let notifier = SystemAutoPasteNotifier(
+            openURL: { _ in true },
+            runAlert: { _ in .alertFirstButtonReturn },
+            isAuthorized: { false },
+            notificationCenter: notificationCenter,
+            defaults: defaults,
+            prepareForRelaunch: { oldController.stop() },
+            relaunchApplication: { _ in
+                let controller = GlobalHotKeyController(
+                    registrar: ExclusiveHotKeyRegistrar(registration: sharedRegistration),
+                    configuredShortcut: shortcut,
+                    showHistoryPicker: { newPickerCount += 1 }
+                )
+                guard controller.start() else { return false }
+                newController = controller
+                return true
+            },
+            recoverFromFailedRelaunch: { _ = oldController.start() },
+            terminateCurrentApplication: { terminationCount += 1 }
+        )
+
+        notifier.notifyManualPasteRequired()
+        notificationCenter.post(name: NSApplication.didBecomeActiveNotification, object: nil)
+
+        XCTAssertNotNil(newController)
+        XCTAssertEqual(sharedRegistration.registeredShortcut, shortcut)
+        sharedRegistration.invokeHandler()
+        XCTAssertEqual(newPickerCount, 1)
+        XCTAssertEqual(oldPickerCount, 0)
+        XCTAssertEqual(terminationCount, 1)
     }
 
     func testSystemTargetProviderRejectsSnapspoolItself() {
@@ -459,5 +528,59 @@ private final class FailingLoggedPasteboard: ClipboardPasteboardWriting {
     func replaceContents(with representations: [PasteboardRepresentation]) -> Bool {
         log.calls.append("restore")
         return false
+    }
+}
+
+@MainActor
+private final class ExclusiveHotKeyRegistration {
+    private(set) var registeredShortcut: GlobalShortcut?
+    private var owner: ObjectIdentifier?
+    private var handler: (@MainActor @Sendable () -> Void)?
+
+    func register(
+        owner candidateOwner: ObjectIdentifier,
+        shortcut: GlobalShortcut,
+        handler: @MainActor @Sendable @escaping () -> Void
+    ) -> Bool {
+        guard owner == nil || owner == candidateOwner else { return false }
+        owner = candidateOwner
+        registeredShortcut = shortcut
+        self.handler = handler
+        return true
+    }
+
+    func unregister(owner candidateOwner: ObjectIdentifier) {
+        guard owner == candidateOwner else { return }
+        owner = nil
+        registeredShortcut = nil
+        handler = nil
+    }
+
+    func invokeHandler() {
+        handler?()
+    }
+}
+
+@MainActor
+private final class ExclusiveHotKeyRegistrar: GlobalHotKeyRegistering {
+    private let registration: ExclusiveHotKeyRegistration
+
+    init(registration: ExclusiveHotKeyRegistration) {
+        self.registration = registration
+    }
+
+    func register(
+        _ shortcut: GlobalShortcut,
+        handler: @MainActor @Sendable @escaping () -> Void
+    ) -> Bool {
+        registration.register(
+            owner: ObjectIdentifier(self),
+            shortcut: shortcut,
+            handler: handler
+        )
+    }
+
+    func unregister() {
+        registration.unregister(owner: ObjectIdentifier(self))
     }
 }

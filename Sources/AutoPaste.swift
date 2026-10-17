@@ -114,7 +114,9 @@ final class SystemAutoPasteNotifier: NSObject, AutoPasteNotifying {
     private let notificationCenter: NotificationCenter
     private let defaults: UserDefaults
     private let applicationURL: URL
+    private let prepareForRelaunch: () -> Void
     private let relaunchApplication: (URL) -> Bool
+    private let recoverFromFailedRelaunch: () -> Void
     private let terminateCurrentApplication: () -> Void
     private var isWaitingForSettingsReturn = false
 
@@ -125,6 +127,7 @@ final class SystemAutoPasteNotifier: NSObject, AutoPasteNotifying {
         notificationCenter: NotificationCenter = .default,
         defaults: UserDefaults = .standard,
         applicationURL: URL = Bundle.main.bundleURL,
+        prepareForRelaunch: @escaping () -> Void = {},
         relaunchApplication: @escaping (URL) -> Bool = { applicationURL in
             (try? NSWorkspace.shared.launchApplication(
                 at: applicationURL,
@@ -132,6 +135,7 @@ final class SystemAutoPasteNotifier: NSObject, AutoPasteNotifying {
                 configuration: [:]
             )) != nil
         },
+        recoverFromFailedRelaunch: @escaping () -> Void = {},
         terminateCurrentApplication: @escaping () -> Void = {
             NSApplication.shared.terminate(nil)
         }
@@ -142,7 +146,9 @@ final class SystemAutoPasteNotifier: NSObject, AutoPasteNotifying {
         self.notificationCenter = notificationCenter
         self.defaults = defaults
         self.applicationURL = applicationURL
+        self.prepareForRelaunch = prepareForRelaunch
         self.relaunchApplication = relaunchApplication
+        self.recoverFromFailedRelaunch = recoverFromFailedRelaunch
         self.terminateCurrentApplication = terminateCurrentApplication
         super.init()
         checkPermissionAfterRelaunchIfNeeded()
@@ -221,9 +227,14 @@ final class SystemAutoPasteNotifier: NSObject, AutoPasteNotifying {
         // starts reading its defaults domain.
         defaults.synchronize()
 
+        // Carbon rejects a duplicate shortcut while the old process still
+        // owns it. Release that registration before starting the replacement
+        // process, and restore it if the launch itself fails.
+        prepareForRelaunch()
         if relaunchApplication(applicationURL) {
             terminateCurrentApplication()
         } else {
+            recoverFromFailedRelaunch()
             defaults.removeObject(forKey: Self.pendingPermissionCheckKey)
             showManualRestartAlert()
         }
