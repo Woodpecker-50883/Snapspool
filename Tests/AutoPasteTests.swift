@@ -271,11 +271,13 @@ final class AutoPasteTests: XCTestCase {
         let workspaceNotificationCenter = NotificationCenter()
         var scheduledRechecks: [(@MainActor () -> Void)] = []
         var authorizationResults: [Bool] = []
+        let previousApplication = NSRunningApplication.current
         let authorization = SystemPasteEventAuthorization(
             preflightAccess: { false },
             requestSystemAccess: { false },
             scheduleRecheck: { _, recheck in scheduledRechecks.append(recheck) },
             isApplicationActive: { false },
+            frontmostApplicationProcessIdentifier: { previousApplication.processIdentifier },
             workspaceNotificationCenter: workspaceNotificationCenter
         )
 
@@ -290,10 +292,96 @@ final class AutoPasteTests: XCTestCase {
         authorization.requestAccess { authorizationResults.append($0) }
         workspaceNotificationCenter.post(
             name: NSWorkspace.didActivateApplicationNotification,
-            object: nil
+            object: nil,
+            userInfo: [NSWorkspace.applicationUserInfoKey: previousApplication]
         )
 
         XCTAssertEqual(authorizationResults, [false, false])
+    }
+
+    func testSystemAuthorizationObservesDismissalBeforeRequestCanEmitNotification() {
+        let workspaceNotificationCenter = NotificationCenter()
+        let previousApplication = NSRunningApplication.current
+        var scheduledRechecks: [(@MainActor () -> Void)] = []
+        var authorizationResults: [Bool] = []
+        let authorization = SystemPasteEventAuthorization(
+            preflightAccess: { false },
+            requestSystemAccess: {
+                workspaceNotificationCenter.post(
+                    name: NSWorkspace.didActivateApplicationNotification,
+                    object: nil,
+                    userInfo: [NSWorkspace.applicationUserInfoKey: previousApplication]
+                )
+                return false
+            },
+            scheduleRecheck: { _, recheck in scheduledRechecks.append(recheck) },
+            isApplicationActive: { false },
+            frontmostApplicationProcessIdentifier: { previousApplication.processIdentifier },
+            workspaceNotificationCenter: workspaceNotificationCenter
+        )
+
+        authorization.requestAccess { authorizationResults.append($0) }
+
+        XCTAssertEqual(authorizationResults, [false])
+        XCTAssertEqual(scheduledRechecks.count, 1)
+        scheduledRechecks.removeFirst()()
+        XCTAssertEqual(authorizationResults, [false], "A stale scheduled poll must not complete twice")
+    }
+
+    func testSystemAuthorizationIgnoresUnrelatedActivationWhileDialogIsVisible() {
+        let workspaceNotificationCenter = NotificationCenter()
+        let unrelatedApplication = NSRunningApplication.current
+        var isApplicationActive = false
+        var authorizationResults: [Bool] = []
+        let authorization = SystemPasteEventAuthorization(
+            preflightAccess: { false },
+            requestSystemAccess: { false },
+            scheduleRecheck: { _, _ in },
+            isApplicationActive: { isApplicationActive },
+            frontmostApplicationProcessIdentifier: {
+                unrelatedApplication.processIdentifier &+ 1
+            },
+            workspaceNotificationCenter: workspaceNotificationCenter
+        )
+
+        authorization.requestAccess { authorizationResults.append($0) }
+        authorization.requestAccess { authorizationResults.append($0) }
+        workspaceNotificationCenter.post(
+            name: NSWorkspace.didActivateApplicationNotification,
+            object: nil,
+            userInfo: [NSWorkspace.applicationUserInfoKey: unrelatedApplication]
+        )
+
+        XCTAssertTrue(authorizationResults.isEmpty)
+
+        isApplicationActive = true
+        workspaceNotificationCenter.post(
+            name: NSWorkspace.didActivateApplicationNotification,
+            object: nil,
+            userInfo: [NSWorkspace.applicationUserInfoKey: unrelatedApplication]
+        )
+        XCTAssertEqual(authorizationResults, [false, false])
+    }
+
+    func testSystemAuthorizationDoesNotTreatAnUnidentifiedActivationAsDismissal() {
+        let workspaceNotificationCenter = NotificationCenter()
+        var authorizationResult: Bool?
+        let authorization = SystemPasteEventAuthorization(
+            preflightAccess: { false },
+            requestSystemAccess: { false },
+            scheduleRecheck: { _, _ in },
+            isApplicationActive: { false },
+            frontmostApplicationProcessIdentifier: { nil },
+            workspaceNotificationCenter: workspaceNotificationCenter
+        )
+
+        authorization.requestAccess { authorizationResult = $0 }
+        workspaceNotificationCenter.post(
+            name: NSWorkspace.didActivateApplicationNotification,
+            object: nil
+        )
+
+        XCTAssertNil(authorizationResult)
     }
 
     func testReturningFromSettingsRechecksPermissionAndShowsThatAutoPasteIsReady() {
