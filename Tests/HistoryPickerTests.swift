@@ -280,7 +280,7 @@ final class HistoryPickerTests: XCTestCase {
         XCTAssertEqual(targetProvider.captureCount, 1)
     }
 
-    func testImageThumbnailLongestEdgeIsAtMost256Pixels() throws {
+    func testImageThumbnailLongestEdgeProvidesRetinaResolution() throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -289,7 +289,7 @@ final class HistoryPickerTests: XCTestCase {
         let bitmap = try XCTUnwrap(NSBitmapImageRep(
             bitmapDataPlanes: nil,
             pixelsWide: 800,
-            pixelsHigh: 400,
+            pixelsHigh: 200,
             bitsPerSample: 8,
             samplesPerPixel: 4,
             hasAlpha: true,
@@ -302,22 +302,31 @@ final class HistoryPickerTests: XCTestCase {
 
         let thumbnail = try XCTUnwrap(HistoryThumbnail.make(from: fileURL))
         let representation = try XCTUnwrap(thumbnail.representations.first)
+        let displaySize = HistoryPickerLayout.thumbnailDisplaySize(
+            for: thumbnail,
+            backingScaleFactor: 2
+        )
 
-        XCTAssertEqual(representation.pixelsWide, 256)
+        XCTAssertEqual(representation.pixelsWide, 512)
         XCTAssertEqual(representation.pixelsHigh, 128)
+        XCTAssertGreaterThanOrEqual(displaySize.width, HistoryPickerLayout.width / 2)
+        XCTAssertLessThanOrEqual(displaySize.width * 2, CGFloat(representation.pixelsWide))
+        XCTAssertLessThanOrEqual(displaySize.height * 2, CGFloat(representation.pixelsHigh))
+        XCTAssertEqual(displaySize.width / displaySize.height, 4, accuracy: 0.001)
     }
 
-    func testThumbnailDisplayDoesNotUpscaleGeneratedPixelsOnRetinaDisplay() {
-        let thumbnail = makeThumbnail(pixelsWide: 256, pixelsHigh: 128)
+    func testThumbnailImageUsesAtLeastHalfOfPickerWidthOnRetinaDisplay() {
+        let thumbnail = makeThumbnail(pixelsWide: 512, pixelsHigh: 128)
 
         let displaySize = HistoryPickerLayout.thumbnailDisplaySize(
             for: thumbnail,
             backingScaleFactor: 2
         )
 
-        XCTAssertLessThanOrEqual(displaySize.width * 2, 256)
+        XCTAssertGreaterThanOrEqual(displaySize.width, HistoryPickerLayout.width / 2)
+        XCTAssertLessThanOrEqual(displaySize.width * 2, 512)
         XCTAssertLessThanOrEqual(displaySize.height * 2, 128)
-        XCTAssertEqual(displaySize.width / displaySize.height, 2, accuracy: 0.001)
+        XCTAssertEqual(displaySize.width / displaySize.height, 4, accuracy: 0.001)
         XCTAssertLessThanOrEqual(displaySize.width, HistoryPickerLayout.thumbnailAreaSize.width)
         XCTAssertLessThanOrEqual(displaySize.height, HistoryPickerLayout.thumbnailAreaSize.height)
     }

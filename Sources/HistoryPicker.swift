@@ -113,7 +113,9 @@ struct HistoryThumbnailGenerator: @unchecked Sendable {
 }
 
 enum HistoryThumbnail {
-    static let maximumPixelLength = 256
+    // The picker reserves up to 256 points horizontally. Generate enough
+    // pixels for that width to remain sharp on a 2x Retina display.
+    static let maximumPixelLength = 512
 
     static func make(from fileURL: URL) -> NSImage? {
         guard let source = NSImage(contentsOf: fileURL),
