@@ -118,6 +118,9 @@ final class AutoPasteTests: XCTestCase {
     }
 
     func testRestartButtonRelaunchesApplicationAndTerminatesCurrentInstance() {
+        let suiteName = "AutoPasteTests.restart.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
         let notificationCenter = NotificationCenter()
         let applicationURL = URL(fileURLWithPath: "/Applications/Snapspool.app")
         var relaunchedURLs: [URL] = []
@@ -131,6 +134,7 @@ final class AutoPasteTests: XCTestCase {
             },
             isAuthorized: { false },
             notificationCenter: notificationCenter,
+            defaults: defaults,
             applicationURL: applicationURL,
             relaunchApplication: {
                 relaunchedURLs.append($0)
@@ -151,7 +155,73 @@ final class AutoPasteTests: XCTestCase {
         XCTAssertEqual(terminationCount, 1)
     }
 
+    func testRelaunchedInstanceRechecksPermissionAndShowsThatAutoPasteIsReady() {
+        let suiteName = "AutoPasteTests.permissionRelaunch.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let notificationCenter = NotificationCenter()
+        var terminationCount = 0
+        var oldInstanceAlerts: [NSAlert] = []
+        let oldInstance = SystemAutoPasteNotifier(
+            openURL: { _ in true },
+            runAlert: {
+                oldInstanceAlerts.append($0)
+                return .alertFirstButtonReturn
+            },
+            isAuthorized: { false },
+            notificationCenter: notificationCenter,
+            defaults: defaults,
+            relaunchApplication: { _ in true },
+            terminateCurrentApplication: { terminationCount += 1 }
+        )
+
+        oldInstance.notifyManualPasteRequired()
+        notificationCenter.post(name: NSApplication.didBecomeActiveNotification, object: nil)
+
+        var authorizationChecks = 0
+        var newInstanceAlerts: [NSAlert] = []
+        _ = SystemAutoPasteNotifier(
+            runAlert: {
+                newInstanceAlerts.append($0)
+                return .alertFirstButtonReturn
+            },
+            isAuthorized: {
+                authorizationChecks += 1
+                return true
+            },
+            notificationCenter: NotificationCenter(),
+            defaults: defaults
+        )
+
+        XCTAssertEqual(terminationCount, 1)
+        XCTAssertEqual(authorizationChecks, 1)
+        XCTAssertEqual(newInstanceAlerts.count, 1)
+        XCTAssertEqual(
+            newInstanceAlerts.first?.messageText,
+            L10n.string("autopaste.permission-enabled-title")
+        )
+        XCTAssertEqual(
+            newInstanceAlerts.first?.informativeText,
+            L10n.string("autopaste.permission-enabled-message")
+        )
+
+        var laterAuthorizationChecks = 0
+        _ = SystemAutoPasteNotifier(
+            runAlert: { _ in XCTFail("The consumed relaunch state must not show another alert"); return .abort },
+            isAuthorized: {
+                laterAuthorizationChecks += 1
+                return true
+            },
+            notificationCenter: NotificationCenter(),
+            defaults: defaults
+        )
+        XCTAssertEqual(laterAuthorizationChecks, 0)
+    }
+
     func testFailedAutomaticRestartShowsManualFallbackWithoutTerminating() {
+        let suiteName = "AutoPasteTests.failedRestart.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
         let notificationCenter = NotificationCenter()
         var displayedAlerts: [NSAlert] = []
         var terminationCount = 0
@@ -163,6 +233,7 @@ final class AutoPasteTests: XCTestCase {
             },
             isAuthorized: { false },
             notificationCenter: notificationCenter,
+            defaults: defaults,
             relaunchApplication: { _ in false },
             terminateCurrentApplication: { terminationCount += 1 }
         )

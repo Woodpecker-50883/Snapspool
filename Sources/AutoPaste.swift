@@ -101,6 +101,9 @@ protocol AutoPasteNotifying {
 
 @MainActor
 final class SystemAutoPasteNotifier: NSObject, AutoPasteNotifying {
+    private static let pendingPermissionCheckKey =
+        "autopaste.pendingPermissionCheckAfterRelaunch"
+
     static let accessibilitySettingsURL = URL(
         string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
     )!
@@ -109,6 +112,7 @@ final class SystemAutoPasteNotifier: NSObject, AutoPasteNotifying {
     private let runAlert: (NSAlert) -> NSApplication.ModalResponse
     private let isAuthorized: () -> Bool
     private let notificationCenter: NotificationCenter
+    private let defaults: UserDefaults
     private let applicationURL: URL
     private let relaunchApplication: (URL) -> Bool
     private let terminateCurrentApplication: () -> Void
@@ -119,6 +123,7 @@ final class SystemAutoPasteNotifier: NSObject, AutoPasteNotifying {
         runAlert: @escaping (NSAlert) -> NSApplication.ModalResponse = { $0.runModal() },
         isAuthorized: @escaping () -> Bool = { CGPreflightPostEventAccess() },
         notificationCenter: NotificationCenter = .default,
+        defaults: UserDefaults = .standard,
         applicationURL: URL = Bundle.main.bundleURL,
         relaunchApplication: @escaping (URL) -> Bool = { applicationURL in
             (try? NSWorkspace.shared.launchApplication(
@@ -135,10 +140,12 @@ final class SystemAutoPasteNotifier: NSObject, AutoPasteNotifying {
         self.runAlert = runAlert
         self.isAuthorized = isAuthorized
         self.notificationCenter = notificationCenter
+        self.defaults = defaults
         self.applicationURL = applicationURL
         self.relaunchApplication = relaunchApplication
         self.terminateCurrentApplication = terminateCurrentApplication
         super.init()
+        checkPermissionAfterRelaunchIfNeeded()
     }
 
     deinit {
@@ -209,11 +216,27 @@ final class SystemAutoPasteNotifier: NSObject, AutoPasteNotifying {
         alert.addButton(withTitle: L10n.string("autopaste.not-now"))
         guard runAlert(alert) == .alertFirstButtonReturn else { return }
 
+        defaults.set(true, forKey: Self.pendingPermissionCheckKey)
+        // Make the hand-off visible to the newly launched process before it
+        // starts reading its defaults domain.
+        defaults.synchronize()
+
         if relaunchApplication(applicationURL) {
             terminateCurrentApplication()
         } else {
+            defaults.removeObject(forKey: Self.pendingPermissionCheckKey)
             showManualRestartAlert()
         }
+    }
+
+    private func checkPermissionAfterRelaunchIfNeeded() {
+        guard defaults.bool(forKey: Self.pendingPermissionCheckKey) else { return }
+
+        // Consume the hand-off even when access is still unavailable so an
+        // ordinary later launch does not repeatedly display a stale result.
+        defaults.removeObject(forKey: Self.pendingPermissionCheckKey)
+        guard isAuthorized() else { return }
+        showPermissionEnabledAlert()
     }
 
     private func showManualRestartAlert() {
