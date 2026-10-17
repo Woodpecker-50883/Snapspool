@@ -232,7 +232,8 @@ final class AutoPasteTests: XCTestCase {
             preflightAccess: { false },
             requestSystemAccess: { false },
             notificationCenter: notificationCenter,
-            scheduleNoDialogFallback: { scheduledFallback = $0 }
+            scheduleNoDialogFallback: { scheduledFallback = $0 },
+            isApplicationActive: { true }
         )
 
         authorization.requestAccess { authorizationResult = $0 }
@@ -242,6 +243,30 @@ final class AutoPasteTests: XCTestCase {
         scheduledFallback?()
 
         XCTAssertEqual(authorizationResult, false)
+    }
+
+    func testSystemAuthorizationKeepsWaitingWhileSystemDialogHasFocus() {
+        let notificationCenter = NotificationCenter()
+        var scheduledFallback: (@MainActor () -> Void)?
+        var authorizationResult: Bool?
+        var isActive = true
+        let authorization = SystemPasteEventAuthorization(
+            preflightAccess: { false },
+            requestSystemAccess: { false },
+            notificationCenter: notificationCenter,
+            scheduleNoDialogFallback: { scheduledFallback = $0 },
+            isApplicationActive: { isActive }
+        )
+
+        authorization.requestAccess { authorizationResult = $0 }
+        // OSの権限ダイアログが前面を奪っている状態
+        isActive = false
+        scheduledFallback?()
+
+        XCTAssertNil(
+            authorizationResult,
+            "OSの権限ダイアログが出ている間に権限要求を打ち切ると、アプリの案内が重なって表示される"
+        )
     }
 
     func testReturningFromSettingsRechecksPermissionAndShowsThatAutoPasteIsReady() {

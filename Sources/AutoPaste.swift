@@ -15,6 +15,7 @@ final class SystemPasteEventAuthorization: PasteEventAuthorizing {
     private let requestSystemAccess: () -> Bool
     private let notificationCenter: NotificationCenter
     private let scheduleNoDialogFallback: (@escaping @MainActor () -> Void) -> Void
+    private let isApplicationActive: () -> Bool
     private var completions: [(Bool) -> Void] = []
     private var isWaitingForSystemDialog = false
     private var didResignWhileWaiting = false
@@ -23,17 +24,23 @@ final class SystemPasteEventAuthorization: PasteEventAuthorizing {
         preflightAccess: @escaping () -> Bool = { CGPreflightPostEventAccess() },
         requestSystemAccess: @escaping () -> Bool = { CGRequestPostEventAccess() },
         notificationCenter: NotificationCenter = .default,
+        // `CGRequestPostEventAccess()` はOSのダイアログを表示している最中も false を返す。
+        // 戻り値からは「ダイアログが出なかった」を判別できないため、
+        // 十分に待ってもアプリが前面のまま（＝OSのダイアログが出ていない）のときだけ、
+        // 拒否済みとみなしてアプリ側の案内へ進む
         scheduleNoDialogFallback: @escaping (@escaping @MainActor () -> Void) -> Void = { completion in
             Task { @MainActor in
-                try? await Task.sleep(for: .seconds(1))
+                try? await Task.sleep(for: .seconds(10))
                 completion()
             }
-        }
+        },
+        isApplicationActive: @escaping () -> Bool = { NSApp?.isActive ?? false }
     ) {
         self.preflightAccess = preflightAccess
         self.requestSystemAccess = requestSystemAccess
         self.notificationCenter = notificationCenter
         self.scheduleNoDialogFallback = scheduleNoDialogFallback
+        self.isApplicationActive = isApplicationActive
     }
 
     deinit {
@@ -70,7 +77,10 @@ final class SystemPasteEventAuthorization: PasteEventAuthorizing {
             scheduleNoDialogFallback { [weak self] in
                 guard let self,
                       self.isWaitingForSystemDialog,
-                      !self.didResignWhileWaiting else { return }
+                      !self.didResignWhileWaiting,
+                      // 前面を奪われていない＝OSのダイアログは出ていない。
+                      // 出ている場合に案内を重ねないための条件
+                      self.isApplicationActive() else { return }
                 self.finishRequest(isAuthorized: self.preflightAccess())
             }
         }

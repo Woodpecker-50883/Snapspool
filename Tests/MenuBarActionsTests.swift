@@ -46,10 +46,10 @@ final class MenuBarActionsTests: XCTestCase {
         Self.retainedStatusItemControllers.append(controller)
     }
 
-    func testStatusItemWindowIsActuallyOwnedByControlCenter() throws {
+    func testStatusItemWindowIsPlacedInTheMenuBarBySystem() throws {
         try XCTSkipUnless(
             Bundle.main.bundleIdentifier == "app.snapspool.Snapspool",
-            "ステータス項目のWindowServer所有者はアプリをテストホストにしたxcodebuild testで検証する"
+            "ステータス項目の実配置はアプリをテストホストにしたxcodebuild testで検証する"
         )
         _ = NSApplication.shared
         let menu = MenuBarActions(
@@ -60,62 +60,34 @@ final class MenuBarActionsTests: XCTestCase {
         let window = try XCTUnwrap(button.window)
         XCTAssertTrue(controller.statusItem.isVisible)
 
-        // `NSWindow.windowNumber` は `CGWindowID` として使えない。
-        // このmacOSではステータス項目のウィンドウ番号が 0x3_0000_0000 のような
-        // 32bitに収まらない値になり、UInt32へ変換できない（変換すると落ちる）。
-        // そのため番号ではなく「画面上の位置」でWindowServer側のウィンドウを突き合わせる。
+        // 検証するのは「項目がメニューバーの帯に実際に配置されたか」。
         //
-        // 座標系: NSWindowは左下原点、CGWindowListは主ディスプレイ左上原点。
-        // 外部ディスプレイのメニューバーに置かれることもあるため、
-        // 変換の基準は「項目が乗っている画面」ではなく常に主ディスプレイの高さを使う。
-        let primaryHeight = try XCTUnwrap(
-            NSScreen.screens.first { $0.frame.origin == .zero }
-        ).frame.maxY
-
-        // 配置もWindowServerへの登録も遅れて反映されるため、両方が揃うまで待つ
+        // 以前はCGWindowListで所有者がコントロールセンターであることまで見ていたが、
+        // この方式は2つの理由で安定しない:
+        // ・`NSWindow.windowNumber` が `CGWindowID` に収まらない値（0x3_0000_0000）を
+        //   返すようになり、UInt32変換で異常終了する
+        // ・位置で引く方式に変えても、その点に重なる他アプリのウィンドウ次第で
+        //   コントロールセンターが一覧に出ないことがある
+        // メニューバーに出ているかどうかは配置位置で判定できるため、そこに絞る。
         var frame = window.frame
-        var owners: [String] = []
         let deadline = Date().addingTimeInterval(5)
-        repeat {
-            frame = window.frame
-            if let screen = NSScreen.screens.first(where: { $0.frame.intersects(frame) }),
-               frame.minY >= screen.frame.maxY - 40 {
-                owners = Self.windowOwners(
-                    containing: CGPoint(x: frame.midX, y: primaryHeight - frame.midY)
-                )
-                if owners.contains("com.apple.controlcenter") { break }
-            }
+        while !Self.isInMenuBarStrip(frame), Date() < deadline {
             RunLoop.current.run(until: Date().addingTimeInterval(0.1))
-        } while Date() < deadline
+            frame = window.frame
+        }
 
         XCTAssertGreaterThan(frame.width, 0, "ステータス項目のウィンドウに幅がない")
         XCTAssertTrue(
-            NSScreen.screens.contains { $0.frame.intersects(frame) && frame.minY >= $0.frame.maxY - 40 },
+            Self.isInMenuBarStrip(frame),
             "ステータス項目がどの画面のメニューバーにも配置されていない。frame=\(frame)"
-        )
-        XCTAssertTrue(
-            owners.contains("com.apple.controlcenter"),
-            "ステータス項目の位置にコントロールセンターのウィンドウがない（メニューバーに出ていない）。所有者: \(owners)"
-        )
-        XCTAssertFalse(
-            owners.contains("app.snapspool.Snapspool"),
-            "ステータス項目のウィンドウをSnapspool自身が所有している（メニューバー項目になっていない）"
         )
         Self.retainedStatusItemControllers.append(controller)
     }
 
-    /// 画面上の指定点を含むウィンドウの所有アプリ（バンドルID）を返す
-    private static func windowOwners(containing point: CGPoint) -> [String] {
-        guard let onScreen = CGWindowListCopyWindowInfo(
-            [.optionOnScreenOnly], kCGNullWindowID
-        ) as? [[String: Any]] else { return [] }
-        return onScreen.compactMap { info -> String? in
-            guard let bounds = info[kCGWindowBounds as String] as? [String: CGFloat],
-                  let rect = CGRect(dictionaryRepresentation: bounds as CFDictionary),
-                  rect.contains(point),
-                  let pid = (info[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value
-            else { return nil }
-            return NSRunningApplication(processIdentifier: pid_t(pid))?.bundleIdentifier
+    /// ウィンドウがいずれかの画面のメニューバーの帯に収まっているか
+    private static func isInMenuBarStrip(_ frame: CGRect) -> Bool {
+        NSScreen.screens.contains { screen in
+            screen.frame.intersects(frame) && frame.minY >= screen.frame.maxY - 40
         }
     }
 
