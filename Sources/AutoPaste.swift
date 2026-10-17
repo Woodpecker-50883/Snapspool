@@ -14,6 +14,7 @@ final class SystemPasteEventAuthorization: PasteEventAuthorizing {
     private let preflightAccess: () -> Bool
     private let requestSystemAccess: () -> Bool
     private let notificationCenter: NotificationCenter
+    private let scheduleNoDialogFallback: (@escaping @MainActor () -> Void) -> Void
     private var completions: [(Bool) -> Void] = []
     private var isWaitingForSystemDialog = false
     private var didResignWhileWaiting = false
@@ -21,11 +22,18 @@ final class SystemPasteEventAuthorization: PasteEventAuthorizing {
     init(
         preflightAccess: @escaping () -> Bool = { CGPreflightPostEventAccess() },
         requestSystemAccess: @escaping () -> Bool = { CGRequestPostEventAccess() },
-        notificationCenter: NotificationCenter = .default
+        notificationCenter: NotificationCenter = .default,
+        scheduleNoDialogFallback: @escaping (@escaping @MainActor () -> Void) -> Void = { completion in
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(1))
+                completion()
+            }
+        }
     ) {
         self.preflightAccess = preflightAccess
         self.requestSystemAccess = requestSystemAccess
         self.notificationCenter = notificationCenter
+        self.scheduleNoDialogFallback = scheduleNoDialogFallback
     }
 
     deinit {
@@ -58,6 +66,13 @@ final class SystemPasteEventAuthorization: PasteEventAuthorizing {
 
         if requestSystemAccess() {
             finishRequest(isAuthorized: true)
+        } else {
+            scheduleNoDialogFallback { [weak self] in
+                guard let self,
+                      self.isWaitingForSystemDialog,
+                      !self.didResignWhileWaiting else { return }
+                self.finishRequest(isAuthorized: self.preflightAccess())
+            }
         }
     }
 

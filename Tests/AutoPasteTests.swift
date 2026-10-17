@@ -224,6 +224,26 @@ final class AutoPasteTests: XCTestCase {
         XCTAssertEqual(authorizationResult, true)
     }
 
+    func testSystemAuthorizationCompletesWhenSystemDoesNotShowPermissionDialog() {
+        let notificationCenter = NotificationCenter()
+        var scheduledFallback: (@MainActor () -> Void)?
+        var authorizationResult: Bool?
+        let authorization = SystemPasteEventAuthorization(
+            preflightAccess: { false },
+            requestSystemAccess: { false },
+            notificationCenter: notificationCenter,
+            scheduleNoDialogFallback: { scheduledFallback = $0 }
+        )
+
+        authorization.requestAccess { authorizationResult = $0 }
+        XCTAssertNil(authorizationResult)
+        XCTAssertNotNil(scheduledFallback)
+
+        scheduledFallback?()
+
+        XCTAssertEqual(authorizationResult, false)
+    }
+
     func testReturningFromSettingsRechecksPermissionAndShowsThatAutoPasteIsReady() {
         let notificationCenter = NotificationCenter()
         var authorizationChecks = 0

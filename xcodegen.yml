@@ -60,6 +60,7 @@ targets:
           - AppConfigurationTests.swift
       - path: Resources
     dependencies:
+      - target: Snapspool
       - target: SnapspoolTestable
     settings:
       base:

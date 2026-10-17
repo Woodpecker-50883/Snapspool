@@ -6,9 +6,16 @@ import XCTest
 
 @MainActor
 final class MenuBarActionsTests: XCTestCase {
-    // Keep status items alive for the managed test session.
+    // テスト中だけステータス項目を生かしておく。
+    // 保持し続けるとメニューバーの枠が埋まり、後のテストの項目が画面外に置かれる
     private static var retainedStatusItemControllers: [MenuBarStatusItemController] = []
     private static var retainedRuntimes: [SnapspoolRuntime] = []
+
+    override func tearDown() {
+        Self.retainedStatusItemControllers.removeAll()
+        Self.retainedRuntimes.removeAll()
+        super.tearDown()
+    }
 
     func testStatusItemControllerConfiguresButtonAndRequiredMenu() throws {
         try XCTSkipIf(
@@ -51,20 +58,65 @@ final class MenuBarActionsTests: XCTestCase {
         let controller = MenuBarStatusItemController(menu: menu)
         let button = try XCTUnwrap(controller.statusItem.button)
         let window = try XCTUnwrap(button.window)
+        XCTAssertTrue(controller.statusItem.isVisible)
 
-        RunLoop.current.run(until: Date().addingTimeInterval(0.1))
-        let windowInfo = try XCTUnwrap(try XCTUnwrap(
-            CGWindowListCopyWindowInfo(
-                [.optionIncludingWindow],
-                CGWindowID(window.windowNumber)
-            ) as? [[String: Any]]
-        ).first)
-        let ownerNumber = try XCTUnwrap(windowInfo[kCGWindowOwnerPID as String] as? NSNumber)
-        let ownerPID = pid_t(ownerNumber.int32Value)
-        let owner = try XCTUnwrap(NSRunningApplication(processIdentifier: ownerPID))
+        // `NSWindow.windowNumber` は `CGWindowID` として使えない。
+        // このmacOSではステータス項目のウィンドウ番号が 0x3_0000_0000 のような
+        // 32bitに収まらない値になり、UInt32へ変換できない（変換すると落ちる）。
+        // そのため番号ではなく「画面上の位置」でWindowServer側のウィンドウを突き合わせる。
+        //
+        // 座標系: NSWindowは左下原点、CGWindowListは主ディスプレイ左上原点。
+        // 外部ディスプレイのメニューバーに置かれることもあるため、
+        // 変換の基準は「項目が乗っている画面」ではなく常に主ディスプレイの高さを使う。
+        let primaryHeight = try XCTUnwrap(
+            NSScreen.screens.first { $0.frame.origin == .zero }
+        ).frame.maxY
 
-        XCTAssertEqual(owner.bundleIdentifier, "com.apple.controlcenter")
+        // 配置もWindowServerへの登録も遅れて反映されるため、両方が揃うまで待つ
+        var frame = window.frame
+        var owners: [String] = []
+        let deadline = Date().addingTimeInterval(5)
+        repeat {
+            frame = window.frame
+            if let screen = NSScreen.screens.first(where: { $0.frame.intersects(frame) }),
+               frame.minY >= screen.frame.maxY - 40 {
+                owners = Self.windowOwners(
+                    containing: CGPoint(x: frame.midX, y: primaryHeight - frame.midY)
+                )
+                if owners.contains("com.apple.controlcenter") { break }
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        } while Date() < deadline
+
+        XCTAssertGreaterThan(frame.width, 0, "ステータス項目のウィンドウに幅がない")
+        XCTAssertTrue(
+            NSScreen.screens.contains { $0.frame.intersects(frame) && frame.minY >= $0.frame.maxY - 40 },
+            "ステータス項目がどの画面のメニューバーにも配置されていない。frame=\(frame)"
+        )
+        XCTAssertTrue(
+            owners.contains("com.apple.controlcenter"),
+            "ステータス項目の位置にコントロールセンターのウィンドウがない（メニューバーに出ていない）。所有者: \(owners)"
+        )
+        XCTAssertFalse(
+            owners.contains("app.snapspool.Snapspool"),
+            "ステータス項目のウィンドウをSnapspool自身が所有している（メニューバー項目になっていない）"
+        )
         Self.retainedStatusItemControllers.append(controller)
+    }
+
+    /// 画面上の指定点を含むウィンドウの所有アプリ（バンドルID）を返す
+    private static func windowOwners(containing point: CGPoint) -> [String] {
+        guard let onScreen = CGWindowListCopyWindowInfo(
+            [.optionOnScreenOnly], kCGNullWindowID
+        ) as? [[String: Any]] else { return [] }
+        return onScreen.compactMap { info -> String? in
+            guard let bounds = info[kCGWindowBounds as String] as? [String: CGFloat],
+                  let rect = CGRect(dictionaryRepresentation: bounds as CFDictionary),
+                  rect.contains(point),
+                  let pid = (info[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value
+            else { return nil }
+            return NSRunningApplication(processIdentifier: pid_t(pid))?.bundleIdentifier
+        }
     }
 
     func testStatusItemControllerKeepsMenuUsableWhenAssetLoadingFails() throws {
