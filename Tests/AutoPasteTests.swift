@@ -267,6 +267,35 @@ final class AutoPasteTests: XCTestCase {
         XCTAssertEqual(scheduledRechecks.count, 1, "Polling must continue until the system dialog closes")
     }
 
+    func testSystemAuthorizationCompletesAllPendingDenialsWhenDialogClosesWhileAppStaysInactive() {
+        let workspaceNotificationCenter = NotificationCenter()
+        var scheduledRechecks: [(@MainActor () -> Void)] = []
+        var authorizationResults: [Bool] = []
+        let authorization = SystemPasteEventAuthorization(
+            preflightAccess: { false },
+            requestSystemAccess: { false },
+            scheduleRecheck: { _, recheck in scheduledRechecks.append(recheck) },
+            isApplicationActive: { false },
+            workspaceNotificationCenter: workspaceNotificationCenter
+        )
+
+        authorization.requestAccess { authorizationResults.append($0) }
+        scheduledRechecks.removeFirst()()
+
+        XCTAssertTrue(
+            authorizationResults.isEmpty,
+            "The app-side permission notice must not appear over the system dialog"
+        )
+
+        authorization.requestAccess { authorizationResults.append($0) }
+        workspaceNotificationCenter.post(
+            name: NSWorkspace.didActivateApplicationNotification,
+            object: nil
+        )
+
+        XCTAssertEqual(authorizationResults, [false, false])
+    }
+
     func testReturningFromSettingsRechecksPermissionAndShowsThatAutoPasteIsReady() {
         var scheduledRecheck: (@MainActor () -> Void)?
         var authorizationChecks = 0

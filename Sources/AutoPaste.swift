@@ -16,8 +16,10 @@ final class SystemPasteEventAuthorization: PasteEventAuthorizing {
     private let requestSystemAccess: () -> Bool
     private let scheduleRecheck: (TimeInterval, @escaping @MainActor () -> Void) -> Void
     private let isApplicationActive: () -> Bool
+    private let workspaceNotificationCenter: NotificationCenter
     private var completions: [(Bool) -> Void] = []
     private var isWaitingForSystemDialog = false
+    private var isObservingDialogDismissal = false
 
     init(
         preflightAccess: @escaping () -> Bool = { CGPreflightPostEventAccess() },
@@ -28,12 +30,14 @@ final class SystemPasteEventAuthorization: PasteEventAuthorizing {
                 completion()
             }
         },
-        isApplicationActive: @escaping () -> Bool = { NSApp?.isActive ?? false }
+        isApplicationActive: @escaping () -> Bool = { NSApp?.isActive ?? false },
+        workspaceNotificationCenter: NotificationCenter = NSWorkspace.shared.notificationCenter
     ) {
         self.preflightAccess = preflightAccess
         self.requestSystemAccess = requestSystemAccess
         self.scheduleRecheck = scheduleRecheck
         self.isApplicationActive = isApplicationActive
+        self.workspaceNotificationCenter = workspaceNotificationCenter
     }
 
     func requestAccess(completion: @escaping (Bool) -> Void) {
@@ -70,14 +74,45 @@ final class SystemPasteEventAuthorization: PasteEventAuthorizing {
             // explanation can be shown without covering the system UI.
             finishRequest(isAuthorized: false)
         } else {
-            // The system prompt owns focus. Keep polling rather than waiting
-            // for an activation notification, which LSUIElement apps may not receive.
+            // The system prompt owns focus. Keep polling for a grant and also
+            // observe the next frontmost application: LSUIElement apps may not
+            // themselves receive an activation notification after dismissal.
+            observeDialogDismissalIfNeeded()
             scheduleNextRecheck()
         }
     }
 
+    private func observeDialogDismissalIfNeeded() {
+        guard !isObservingDialogDismissal else { return }
+        isObservingDialogDismissal = true
+        workspaceNotificationCenter.addObserver(
+            self,
+            selector: #selector(frontmostApplicationChangedAfterSystemDialog),
+            name: NSWorkspace.didActivateApplicationNotification,
+            object: nil
+        )
+    }
+
+    @objc private func frontmostApplicationChangedAfterSystemDialog() {
+        guard isWaitingForSystemDialog, isObservingDialogDismissal else { return }
+
+        // A menu-bar-only app is not guaranteed to become active again after
+        // the system prompt closes. The workspace does, however, activate the
+        // application that receives focus next, so this notification is the
+        // dismissal signal even when NSApp remains inactive.
+        finishRequest(isAuthorized: preflightAccess())
+    }
+
     private func finishRequest(isAuthorized: Bool) {
         isWaitingForSystemDialog = false
+        if isObservingDialogDismissal {
+            workspaceNotificationCenter.removeObserver(
+                self,
+                name: NSWorkspace.didActivateApplicationNotification,
+                object: nil
+            )
+            isObservingDialogDismissal = false
+        }
         let pendingCompletions = completions
         completions.removeAll()
         pendingCompletions.forEach { $0(isAuthorized) }
