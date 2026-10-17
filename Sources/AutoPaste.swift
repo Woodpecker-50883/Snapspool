@@ -209,6 +209,7 @@ protocol AutoPastePermissionGuiding: AnyObject {
     var permissionState: AutoPastePermissionState { get }
     func setPermissionStateHandler(_ handler: @escaping (AutoPastePermissionState) -> Void)
     func setSetupGuideVisible(_ isVisible: Bool)
+    func consumeSetupRelaunchPresentationRequest() -> Bool
     func requestPermissionFromSetup()
     func restartFromSetup()
 }
@@ -223,6 +224,8 @@ enum AutoPastePermissionState: Equatable {
 final class SystemAutoPasteNotifier: NSObject, AutoPasteNotifying, AutoPastePermissionGuiding {
     private static let pendingPermissionCheckKey =
         "autopaste.pendingPermissionCheckAfterRelaunch"
+    private static let pendingSetupPermissionCheckKey =
+        "autopaste.pendingSetupPermissionCheckAfterRelaunch"
     static let permissionRecheckInterval: TimeInterval = 0.5
 
     static let accessibilitySettingsURL = URL(
@@ -243,6 +246,7 @@ final class SystemAutoPasteNotifier: NSObject, AutoPasteNotifying, AutoPastePerm
     private let terminateCurrentApplication: () -> Void
     private var isWaitingForSettingsReturn = false
     private var isSetupGuideVisible = false
+    private var shouldPresentSetupAfterRelaunch = false
     private var permissionStateHandler: ((AutoPastePermissionState) -> Void)?
     private(set) var permissionState: AutoPastePermissionState = .unauthorized {
         didSet {
@@ -346,9 +350,15 @@ final class SystemAutoPasteNotifier: NSObject, AutoPasteNotifying, AutoPastePerm
         scheduleSetupPermissionRefresh()
     }
 
+    func consumeSetupRelaunchPresentationRequest() -> Bool {
+        guard shouldPresentSetupAfterRelaunch else { return false }
+        shouldPresentSetupAfterRelaunch = false
+        return true
+    }
+
     func restartFromSetup() {
         guard permissionState == .restartRequired else { return }
-        restartApplication()
+        restartApplication(fromSetupGuide: true)
     }
 
     private func startWaitingForSettingsReturn() {
@@ -421,12 +431,14 @@ final class SystemAutoPasteNotifier: NSObject, AutoPasteNotifying, AutoPastePerm
         alert.addButton(withTitle: L10n.string("autopaste.not-now"))
         guard runAlert(alert) == .alertFirstButtonReturn else { return }
 
-        restartApplication()
+        restartApplication(fromSetupGuide: false)
     }
 
-    private func restartApplication() {
-
-        defaults.set(true, forKey: Self.pendingPermissionCheckKey)
+    private func restartApplication(fromSetupGuide: Bool) {
+        let pendingKey = fromSetupGuide
+            ? Self.pendingSetupPermissionCheckKey
+            : Self.pendingPermissionCheckKey
+        defaults.set(true, forKey: pendingKey)
         // Make the hand-off visible to the newly launched process before it
         // starts reading its defaults domain.
         defaults.synchronize()
@@ -439,12 +451,19 @@ final class SystemAutoPasteNotifier: NSObject, AutoPasteNotifying, AutoPastePerm
             terminateCurrentApplication()
         } else {
             recoverFromFailedRelaunch()
-            defaults.removeObject(forKey: Self.pendingPermissionCheckKey)
+            defaults.removeObject(forKey: pendingKey)
             showManualRestartAlert()
         }
     }
 
     private func checkPermissionAfterRelaunchIfNeeded() {
+        if defaults.bool(forKey: Self.pendingSetupPermissionCheckKey) {
+            defaults.removeObject(forKey: Self.pendingSetupPermissionCheckKey)
+            shouldPresentSetupAfterRelaunch = true
+            permissionState = isAuthorized() ? .active : .unauthorized
+            return
+        }
+
         guard defaults.bool(forKey: Self.pendingPermissionCheckKey) else { return }
 
         // Consume the hand-off even when access is still unavailable so an

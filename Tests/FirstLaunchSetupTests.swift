@@ -156,6 +156,66 @@ final class FirstLaunchSetupTests: XCTestCase {
         XCTAssertEqual(relaunchSequence, ["prepare", "launch", "terminate"])
     }
 
+    func testSetupRelaunchReopensGuideAsActiveWithoutPermissionEnabledAlert() throws {
+        let (defaults, suiteName) = makeIsolatedDefaults()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        var scheduledPermissionRecheck: (@MainActor () -> Void)?
+        var oldInstanceAlerts: [NSAlert] = []
+        let oldNotifier = SystemAutoPasteNotifier(
+            openURL: { _ in true },
+            runAlert: {
+                oldInstanceAlerts.append($0)
+                return .alertFirstButtonReturn
+            },
+            requestAuthorization: { $0(false) },
+            isAuthorized: { false },
+            isApplicationActive: { true },
+            schedulePermissionRecheck: { _, recheck in scheduledPermissionRecheck = recheck },
+            defaults: defaults,
+            relaunchApplication: { _ in true },
+            terminateCurrentApplication: {}
+        )
+        let oldController = FirstLaunchSetupController(
+            defaults: defaults,
+            autoPastePermissionGuide: oldNotifier
+        )
+
+        XCTAssertTrue(oldController.showIfNeeded())
+        let oldView = try XCTUnwrap(
+            oldController.window?.contentViewController as? NSHostingController<FirstLaunchSetupView>
+        ).rootView
+        oldView.enableAutoPaste()
+        scheduledPermissionRecheck?()
+        XCTAssertEqual(oldView.model.permissionState, .restartRequired)
+        oldView.restartAutoPaste()
+
+        var newInstanceAlerts: [NSAlert] = []
+        let newNotifier = SystemAutoPasteNotifier(
+            runAlert: {
+                newInstanceAlerts.append($0)
+                return .alertFirstButtonReturn
+            },
+            isAuthorized: { true },
+            defaults: defaults
+        )
+        let newController = FirstLaunchSetupController(
+            defaults: defaults,
+            autoPastePermissionGuide: newNotifier
+        )
+
+        XCTAssertTrue(newController.showIfNeeded())
+        let newView = try XCTUnwrap(
+            newController.window?.contentViewController as? NSHostingController<FirstLaunchSetupView>
+        ).rootView
+        XCTAssertTrue(try XCTUnwrap(newController.window).isVisible)
+        XCTAssertEqual(newView.model.permissionState, .active)
+        XCTAssertEqual(newView.permissionStatusText, newView.content.permissionActiveStatus)
+        XCTAssertFalse(newView.showsRestartButton)
+        XCTAssertTrue(oldInstanceAlerts.isEmpty)
+        XCTAssertTrue(newInstanceAlerts.isEmpty)
+        XCTAssertFalse(newController.showIfNeeded(), "The setup relaunch hand-off must be consumed once")
+    }
+
     func testSetupWindowAutomaticallyReflectsGrantedPermissionAndSuppressesFallbackModal() throws {
         var scheduledPermissionRechecks: [(@MainActor () -> Void)] = []
         var isAuthorized = false

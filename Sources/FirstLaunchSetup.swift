@@ -210,6 +210,11 @@ final class FirstLaunchSetupController: NSWindowController, NSWindowDelegate {
 
     @discardableResult
     func showIfNeeded() -> Bool {
+        if autoPastePermissionGuide.consumeSetupRelaunchPresentationRequest() {
+            defaults.set(true, forKey: Self.didPresentKey)
+            show()
+            return true
+        }
         guard !defaults.bool(forKey: Self.didPresentKey) else { return false }
 
         defaults.set(true, forKey: Self.didPresentKey)
