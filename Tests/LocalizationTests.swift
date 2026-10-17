@@ -58,11 +58,20 @@ final class LocalizationTests: XCTestCase {
             "Images are saved to ~/Pictures/Snapspool/ by default. You can choose a different folder in Settings.",
             "画像の既定の保存先は ~/Pictures/Snapspool/ です。設定画面から別のフォルダへ変更できます。"
         ),
+        "setup.auto-paste-instructions": (
+            "Enable automatic paste now:\n1. Choose Enable Automatic Paste below.\n2. Allow Snapspool in the macOS access dialog.\n3. If requested, restart Snapspool using the button in this guide.",
+            "自動貼り付けを今すぐ有効にする手順：\n1. 下の「自動貼り付けを有効にする」を選ぶ。\n2. macOSの権限ダイアログでSnapspoolを許可する。\n3. 必要な場合は、この案内に表示されるボタンでSnapspoolを再起動する。"
+        ),
+        "setup.empty-history-restart-note": (
+            "This initial setup runs while history is empty, so restarting now will not discard any history. You can repeat these steps later from Screenshot Setup Guide in the menu.",
+            "初回セットアップは履歴が空の状態で行うため、今再起動しても履歴は失われません。後からメニューの「スクリーンショットの設定」でも同じ手順を実行できます。"
+        ),
         "setup.manual-settings-path": (
             "If System Settings does not open, go to System Settings > Keyboard > Keyboard Shortcuts > Screenshots.",
             "システム設定が開かない場合は、システム設定 > キーボード > キーボードショートカット > スクリーンショット の順に開いてください。"
         ),
         "setup.open-settings": ("Open Keyboard Shortcuts…", "キーボードショートカットを開く…"),
+        "setup.enable-auto-paste": ("Enable Automatic Paste…", "自動貼り付けを有効にする…"),
         "setup.done": ("Done", "完了"),
         "notification.destination-save-failed": (
             "The image could not be written to the destination, so it was saved in temporary history storage.",

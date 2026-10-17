@@ -83,6 +83,29 @@ final class AutoPasteTests: XCTestCase {
         XCTAssertTrue(openedURLs.isEmpty)
     }
 
+    func testSetupPermissionRequestUsesSystemAuthorizationPathAndReportsSuccess() {
+        var requestCount = 0
+        var displayedAlert: NSAlert?
+        let notifier = SystemAutoPasteNotifier(
+            runAlert: {
+                displayedAlert = $0
+                return .alertFirstButtonReturn
+            },
+            requestAuthorization: {
+                requestCount += 1
+                return true
+            }
+        )
+
+        notifier.requestPermissionFromSetup()
+
+        XCTAssertEqual(requestCount, 1)
+        XCTAssertEqual(
+            displayedAlert?.messageText,
+            L10n.string("autopaste.permission-enabled-title")
+        )
+    }
+
     func testReturningFromSettingsRechecksPermissionAndShowsThatAutoPasteIsReady() {
         let notificationCenter = NotificationCenter()
         var authorizationChecks = 0

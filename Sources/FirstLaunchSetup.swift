@@ -6,8 +6,11 @@ struct SetupGuideContent: Equatable {
     let introduction: String
     let shortcutInstructions: String
     let destinationInstructions: String
+    let autoPasteInstructions: String
+    let emptyHistoryRestartNote: String
     let manualSettingsPath: String
     let openSettingsButtonTitle: String
+    let enableAutoPasteButtonTitle: String
     let doneButtonTitle: String
 
     static func localized(
@@ -27,6 +30,16 @@ struct SetupGuideContent: Equatable {
                 bundle: bundle,
                 language: language
             ),
+            autoPasteInstructions: L10n.string(
+                "setup.auto-paste-instructions",
+                bundle: bundle,
+                language: language
+            ),
+            emptyHistoryRestartNote: L10n.string(
+                "setup.empty-history-restart-note",
+                bundle: bundle,
+                language: language
+            ),
             manualSettingsPath: L10n.string(
                 "setup.manual-settings-path",
                 bundle: bundle,
@@ -34,6 +47,11 @@ struct SetupGuideContent: Equatable {
             ),
             openSettingsButtonTitle: L10n.string(
                 "setup.open-settings",
+                bundle: bundle,
+                language: language
+            ),
+            enableAutoPasteButtonTitle: L10n.string(
+                "setup.enable-auto-paste",
                 bundle: bundle,
                 language: language
             ),
@@ -62,6 +80,7 @@ struct SystemKeyboardShortcutSettingsOpener {
 struct FirstLaunchSetupView: View {
     let content: SetupGuideContent
     let openSettings: () -> Void
+    let enableAutoPaste: () -> Void
     let dismiss: () -> Void
 
     var body: some View {
@@ -71,9 +90,13 @@ struct FirstLaunchSetupView: View {
             Text(content.introduction)
             Text(content.shortcutInstructions)
             Text(content.destinationInstructions)
+            Divider()
+            Text(content.autoPasteInstructions)
+            Text(content.emptyHistoryRestartNote)
             Text(content.manualSettingsPath)
             HStack {
                 Button(content.openSettingsButtonTitle, action: openSettings)
+                Button(content.enableAutoPasteButtonTitle, action: enableAutoPaste)
                 Spacer()
                 Button(content.doneButtonTitle, action: dismiss)
                     .keyboardShortcut(.defaultAction)
@@ -90,13 +113,16 @@ final class FirstLaunchSetupController: NSWindowController, NSWindowDelegate {
     private static let didPresentKey = "setup.didPresentFirstLaunchGuide"
 
     private let defaults: UserDefaults
+    private let autoPastePermissionGuide: any AutoPastePermissionGuiding
 
     init(
         defaults: UserDefaults = .standard,
         content: SetupGuideContent = .localized(),
-        settingsOpener: SystemKeyboardShortcutSettingsOpener = .init()
+        settingsOpener: SystemKeyboardShortcutSettingsOpener = .init(),
+        autoPastePermissionGuide: any AutoPastePermissionGuiding = SystemAutoPasteNotifier()
     ) {
         self.defaults = defaults
+        self.autoPastePermissionGuide = autoPastePermissionGuide
 
         let window = NSWindow()
         window.title = content.title
@@ -106,6 +132,7 @@ final class FirstLaunchSetupController: NSWindowController, NSWindowDelegate {
             rootView: FirstLaunchSetupView(
                 content: content,
                 openSettings: { _ = settingsOpener.open() },
+                enableAutoPaste: { autoPastePermissionGuide.requestPermissionFromSetup() },
                 dismiss: { [weak window] in window?.close() }
             )
         )

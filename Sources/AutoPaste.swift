@@ -100,7 +100,12 @@ protocol AutoPasteNotifying {
 }
 
 @MainActor
-final class SystemAutoPasteNotifier: NSObject, AutoPasteNotifying {
+protocol AutoPastePermissionGuiding: AnyObject {
+    func requestPermissionFromSetup()
+}
+
+@MainActor
+final class SystemAutoPasteNotifier: NSObject, AutoPasteNotifying, AutoPastePermissionGuiding {
     private static let pendingPermissionCheckKey =
         "autopaste.pendingPermissionCheckAfterRelaunch"
 
@@ -110,6 +115,7 @@ final class SystemAutoPasteNotifier: NSObject, AutoPasteNotifying {
 
     private let openURL: (URL) -> Bool
     private let runAlert: (NSAlert) -> NSApplication.ModalResponse
+    private let requestAuthorization: () -> Bool
     private let isAuthorized: () -> Bool
     private let notificationCenter: NotificationCenter
     private let defaults: UserDefaults
@@ -123,6 +129,9 @@ final class SystemAutoPasteNotifier: NSObject, AutoPasteNotifying {
     init(
         openURL: @escaping (URL) -> Bool = { NSWorkspace.shared.open($0) },
         runAlert: @escaping (NSAlert) -> NSApplication.ModalResponse = { $0.runModal() },
+        requestAuthorization: @escaping () -> Bool = {
+            CGPreflightPostEventAccess() || CGRequestPostEventAccess()
+        },
         isAuthorized: @escaping () -> Bool = { CGPreflightPostEventAccess() },
         notificationCenter: NotificationCenter = .default,
         defaults: UserDefaults = .standard,
@@ -142,6 +151,7 @@ final class SystemAutoPasteNotifier: NSObject, AutoPasteNotifying {
     ) {
         self.openURL = openURL
         self.runAlert = runAlert
+        self.requestAuthorization = requestAuthorization
         self.isAuthorized = isAuthorized
         self.notificationCenter = notificationCenter
         self.defaults = defaults
@@ -170,6 +180,14 @@ final class SystemAutoPasteNotifier: NSObject, AutoPasteNotifying {
             if !openURL(Self.accessibilitySettingsURL) {
                 stopWaitingForSettingsReturn()
             }
+        }
+    }
+
+    func requestPermissionFromSetup() {
+        if requestAuthorization() {
+            showPermissionEnabledAlert()
+        } else {
+            notifyManualPasteRequired()
         }
     }
 

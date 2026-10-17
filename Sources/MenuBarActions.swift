@@ -79,7 +79,9 @@ public final class SnapspoolRuntime {
         self.clipboardMonitor = clipboardMonitor
         historyPickerController = pickerController
         self.settingsWindowController = settingsWindowController
-        let firstLaunchSetupController = FirstLaunchSetupController()
+        let firstLaunchSetupController = FirstLaunchSetupController(
+            autoPastePermissionGuide: autoPasteNotifier
+        )
         self.firstLaunchSetupController = firstLaunchSetupController
         self.presentFirstLaunchSetupOnStart = presentFirstLaunchSetupOnStart ?? {
             _ = firstLaunchSetupController.showIfNeeded()

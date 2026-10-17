@@ -36,7 +36,12 @@ final class FirstLaunchSetupTests: XCTestCase {
         XCTAssertTrue(english.shortcutInstructions.contains("Copy picture of selected area to the clipboard"))
         XCTAssertTrue(english.destinationInstructions.contains("~/Pictures/Snapspool/"))
         XCTAssertTrue(english.destinationInstructions.contains("Settings"))
+        XCTAssertTrue(english.autoPasteInstructions.contains("1."))
+        XCTAssertTrue(english.autoPasteInstructions.contains("macOS access dialog"))
+        XCTAssertTrue(english.emptyHistoryRestartNote.contains("history is empty"))
+        XCTAssertTrue(english.emptyHistoryRestartNote.contains("Screenshot Setup Guide"))
         XCTAssertEqual(english.openSettingsButtonTitle, "Open Keyboard Shortcuts…")
+        XCTAssertEqual(english.enableAutoPasteButtonTitle, "Enable Automatic Paste…")
         XCTAssertTrue(english.manualSettingsPath.contains("System Settings > Keyboard > Keyboard Shortcuts > Screenshots"))
 
         XCTAssertTrue(japanese.introduction.contains("スクリーンショットをクリップボードにコピー"))
@@ -44,7 +49,12 @@ final class FirstLaunchSetupTests: XCTestCase {
         XCTAssertTrue(japanese.shortcutInstructions.contains("クリップボードにコピー"))
         XCTAssertTrue(japanese.destinationInstructions.contains("~/Pictures/Snapspool/"))
         XCTAssertTrue(japanese.destinationInstructions.contains("設定画面"))
+        XCTAssertTrue(japanese.autoPasteInstructions.contains("1."))
+        XCTAssertTrue(japanese.autoPasteInstructions.contains("macOSの権限ダイアログ"))
+        XCTAssertTrue(japanese.emptyHistoryRestartNote.contains("履歴が空"))
+        XCTAssertTrue(japanese.emptyHistoryRestartNote.contains("スクリーンショットの設定"))
         XCTAssertEqual(japanese.openSettingsButtonTitle, "キーボードショートカットを開く…")
+        XCTAssertEqual(japanese.enableAutoPasteButtonTitle, "自動貼り付けを有効にする…")
         XCTAssertTrue(japanese.manualSettingsPath.contains("システム設定 > キーボード > キーボードショートカット > スクリーンショット"))
     }
 
@@ -78,6 +88,61 @@ final class FirstLaunchSetupTests: XCTestCase {
 
         hostingController?.rootView.openSettings()
         XCTAssertEqual(openedURL, SystemKeyboardShortcutSettingsOpener.settingsURL)
+    }
+
+    func testSetupPermissionActionRequestsOSAccessAndCompletesRestartFlow() throws {
+        let (defaults, suiteName) = makeIsolatedDefaults()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let notificationCenter = NotificationCenter()
+        var permissionRequestCount = 0
+        var displayedAlerts: [NSAlert] = []
+        var openedURL: URL?
+        var relaunchSequence: [String] = []
+        let notifier = SystemAutoPasteNotifier(
+            openURL: {
+                openedURL = $0
+                return true
+            },
+            runAlert: {
+                displayedAlerts.append($0)
+                return .alertFirstButtonReturn
+            },
+            requestAuthorization: {
+                permissionRequestCount += 1
+                return false
+            },
+            isAuthorized: { false },
+            notificationCenter: notificationCenter,
+            defaults: defaults,
+            prepareForRelaunch: { relaunchSequence.append("prepare") },
+            relaunchApplication: { _ in
+                relaunchSequence.append("launch")
+                return true
+            },
+            terminateCurrentApplication: { relaunchSequence.append("terminate") }
+        )
+        let controller = FirstLaunchSetupController(
+            defaults: defaults,
+            autoPastePermissionGuide: notifier
+        )
+        let hostingController = try XCTUnwrap(
+            controller.window?.contentViewController as? NSHostingController<FirstLaunchSetupView>
+        )
+
+        hostingController.rootView.enableAutoPaste()
+
+        XCTAssertEqual(permissionRequestCount, 1)
+        XCTAssertEqual(openedURL, SystemAutoPasteNotifier.accessibilitySettingsURL)
+        XCTAssertEqual(displayedAlerts.count, 1)
+
+        notificationCenter.post(name: NSApplication.didBecomeActiveNotification, object: nil)
+
+        XCTAssertEqual(displayedAlerts.count, 2)
+        XCTAssertEqual(
+            displayedAlerts.last?.buttons.map(\.title),
+            [L10n.string("autopaste.restart"), L10n.string("autopaste.not-now")]
+        )
+        XCTAssertEqual(relaunchSequence, ["prepare", "launch", "terminate"])
     }
 
     private func builtAppURL() throws -> URL {
