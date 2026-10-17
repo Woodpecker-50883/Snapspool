@@ -194,8 +194,7 @@ final class AutoPasteTests: XCTestCase {
             scheduleRecheck: { interval, recheck in
                 scheduledInterval = interval
                 scheduledRecheck = recheck
-            },
-            isApplicationActive: { false }
+            }
         )
 
         authorization.requestAccess { authorizationResult = $0 }
@@ -216,8 +215,7 @@ final class AutoPasteTests: XCTestCase {
         let authorization = SystemPasteEventAuthorization(
             preflightAccess: { isAuthorized },
             requestSystemAccess: { false },
-            scheduleRecheck: { _, recheck in scheduledRecheck = recheck },
-            isApplicationActive: { false }
+            scheduleRecheck: { _, recheck in scheduledRecheck = recheck }
         )
 
         authorization.requestAccess { authorizationResults.append($0) }
@@ -237,7 +235,7 @@ final class AutoPasteTests: XCTestCase {
             preflightAccess: { false },
             requestSystemAccess: { false },
             scheduleRecheck: { _, recheck in scheduledRecheck = recheck },
-            isApplicationActive: { true }
+            isSystemDialogVisible: { false }
         )
 
         authorization.requestAccess { authorizationResult = $0 }
@@ -253,7 +251,7 @@ final class AutoPasteTests: XCTestCase {
             preflightAccess: { false },
             requestSystemAccess: { false },
             scheduleRecheck: { _, recheck in scheduledRechecks.append(recheck) },
-            isApplicationActive: { false }
+            isSystemDialogVisible: { true }
         )
 
         authorization.requestAccess { authorizationResult = $0 }
@@ -271,13 +269,13 @@ final class AutoPasteTests: XCTestCase {
         let workspaceNotificationCenter = NotificationCenter()
         var scheduledRechecks: [(@MainActor () -> Void)] = []
         var authorizationResults: [Bool] = []
+        var isSystemDialogVisible = true
         let previousApplication = NSRunningApplication.current
         let authorization = SystemPasteEventAuthorization(
             preflightAccess: { false },
             requestSystemAccess: { false },
             scheduleRecheck: { _, recheck in scheduledRechecks.append(recheck) },
-            isApplicationActive: { false },
-            frontmostApplicationProcessIdentifier: { previousApplication.processIdentifier },
+            isSystemDialogVisible: { isSystemDialogVisible },
             workspaceNotificationCenter: workspaceNotificationCenter
         )
 
@@ -290,6 +288,7 @@ final class AutoPasteTests: XCTestCase {
         )
 
         authorization.requestAccess { authorizationResults.append($0) }
+        isSystemDialogVisible = false
         workspaceNotificationCenter.post(
             name: NSWorkspace.didActivateApplicationNotification,
             object: nil,
@@ -315,8 +314,7 @@ final class AutoPasteTests: XCTestCase {
                 return false
             },
             scheduleRecheck: { _, recheck in scheduledRechecks.append(recheck) },
-            isApplicationActive: { false },
-            frontmostApplicationProcessIdentifier: { previousApplication.processIdentifier },
+            isSystemDialogVisible: { false },
             workspaceNotificationCenter: workspaceNotificationCenter
         )
 
@@ -331,16 +329,13 @@ final class AutoPasteTests: XCTestCase {
     func testSystemAuthorizationIgnoresUnrelatedActivationWhileDialogIsVisible() {
         let workspaceNotificationCenter = NotificationCenter()
         let unrelatedApplication = NSRunningApplication.current
-        var isApplicationActive = false
+        var isSystemDialogVisible = true
         var authorizationResults: [Bool] = []
         let authorization = SystemPasteEventAuthorization(
             preflightAccess: { false },
             requestSystemAccess: { false },
             scheduleRecheck: { _, _ in },
-            isApplicationActive: { isApplicationActive },
-            frontmostApplicationProcessIdentifier: {
-                unrelatedApplication.processIdentifier &+ 1
-            },
+            isSystemDialogVisible: { isSystemDialogVisible },
             workspaceNotificationCenter: workspaceNotificationCenter
         )
 
@@ -354,7 +349,7 @@ final class AutoPasteTests: XCTestCase {
 
         XCTAssertTrue(authorizationResults.isEmpty)
 
-        isApplicationActive = true
+        isSystemDialogVisible = false
         workspaceNotificationCenter.post(
             name: NSWorkspace.didActivateApplicationNotification,
             object: nil,
@@ -363,15 +358,14 @@ final class AutoPasteTests: XCTestCase {
         XCTAssertEqual(authorizationResults, [false, false])
     }
 
-    func testSystemAuthorizationDoesNotTreatAnUnidentifiedActivationAsDismissal() {
+    func testSystemAuthorizationIgnoresActivationWithoutApplicationInfoWhileDialogIsVisible() {
         let workspaceNotificationCenter = NotificationCenter()
         var authorizationResult: Bool?
         let authorization = SystemPasteEventAuthorization(
             preflightAccess: { false },
             requestSystemAccess: { false },
             scheduleRecheck: { _, _ in },
-            isApplicationActive: { false },
-            frontmostApplicationProcessIdentifier: { nil },
+            isSystemDialogVisible: { true },
             workspaceNotificationCenter: workspaceNotificationCenter
         )
 
@@ -384,19 +378,16 @@ final class AutoPasteTests: XCTestCase {
         XCTAssertNil(authorizationResult)
     }
 
-    func testSystemAuthorizationCompletesWhenInitialFrontmostPIDIsUnavailable() {
+    func testSystemAuthorizationCompletesAllPendingRequestsWhenDialogIsNoLongerVisible() {
         let workspaceNotificationCenter = NotificationCenter()
         let activatedApplication = NSRunningApplication.current
         var scheduledRechecks: [(@MainActor () -> Void)] = []
         var authorizationResults: [Bool] = []
-        var currentTime: TimeInterval = 0
         let authorization = SystemPasteEventAuthorization(
             preflightAccess: { false },
             requestSystemAccess: { false },
             scheduleRecheck: { _, recheck in scheduledRechecks.append(recheck) },
-            isApplicationActive: { false },
-            frontmostApplicationProcessIdentifier: { nil },
-            currentTime: { currentTime },
+            isSystemDialogVisible: { false },
             workspaceNotificationCenter: workspaceNotificationCenter
         )
 
@@ -408,58 +399,55 @@ final class AutoPasteTests: XCTestCase {
             userInfo: [NSWorkspace.applicationUserInfoKey: activatedApplication]
         )
 
-        XCTAssertTrue(
-            authorizationResults.isEmpty,
-            "An unrelated activation must not dismiss the app-side wait while the system dialog may be visible"
-        )
-        currentTime = 0.5
-        scheduledRechecks.removeFirst()()
-        XCTAssertTrue(authorizationResults.isEmpty)
-        currentTime = 1.0
-        scheduledRechecks.removeFirst()()
-
+        XCTAssertEqual(authorizationResults, [false, false])
+        scheduledRechecks.forEach { $0() }
         XCTAssertEqual(authorizationResults, [false, false])
     }
 
-    func testSystemAuthorizationCompletesAfterFocusMovesAndDoesNotReturnToPreviousApp() {
+    func testSystemAuthorizationWaitsPastOneSecondWhileDialogRemainsVisible() {
         let workspaceNotificationCenter = NotificationCenter()
-        let previousApplication = NSRunningApplication.current
         let otherApplication = NSRunningApplication.current
         var scheduledRechecks: [(@MainActor () -> Void)] = []
-        var authorizationResultCount = 0
-        var currentTime: TimeInterval = 0
+        var elapsedTime: TimeInterval = 0
+        var isSystemDialogVisible = true
+        var authorizationResults: [Bool] = []
         let authorization = SystemPasteEventAuthorization(
             preflightAccess: { false },
             requestSystemAccess: { false },
-            scheduleRecheck: { _, recheck in scheduledRechecks.append(recheck) },
-            isApplicationActive: { false },
-            frontmostApplicationProcessIdentifier: {
-                previousApplication.processIdentifier &+ 1
+            scheduleRecheck: { interval, recheck in
+                scheduledRechecks.append {
+                    elapsedTime += interval
+                    recheck()
+                }
             },
-            currentTime: { currentTime },
+            isSystemDialogVisible: { isSystemDialogVisible },
             workspaceNotificationCenter: workspaceNotificationCenter
         )
 
-        authorization.requestAccess { result in
-            XCTAssertFalse(result)
-            authorizationResultCount += 1
-        }
+        authorization.requestAccess { authorizationResults.append($0) }
+        authorization.requestAccess { authorizationResults.append($0) }
         workspaceNotificationCenter.post(
             name: NSWorkspace.didActivateApplicationNotification,
             object: nil,
             userInfo: [NSWorkspace.applicationUserInfoKey: otherApplication]
         )
 
-        XCTAssertEqual(authorizationResultCount, 0)
-        currentTime = 0.5
+        XCTAssertTrue(authorizationResults.isEmpty)
         scheduledRechecks.removeFirst()()
-        XCTAssertEqual(authorizationResultCount, 0)
-        currentTime = 1.0
         scheduledRechecks.removeFirst()()
-        XCTAssertEqual(authorizationResultCount, 1)
+        scheduledRechecks.removeFirst()()
+        XCTAssertEqual(elapsedTime, 1.5)
+        XCTAssertTrue(
+            authorizationResults.isEmpty,
+            "An unrelated activation and more than one second of polling must not outlive the visible system dialog"
+        )
+
+        isSystemDialogVisible = false
+        scheduledRechecks.removeFirst()()
+        XCTAssertEqual(authorizationResults, [false, false])
 
         scheduledRechecks.forEach { $0() }
-        XCTAssertEqual(authorizationResultCount, 1, "Stale polls must not invoke a completion twice")
+        XCTAssertEqual(authorizationResults, [false, false], "Stale polls must not invoke completions twice")
     }
 
     func testReturningFromSettingsRechecksPermissionAndShowsThatAutoPasteIsReady() {

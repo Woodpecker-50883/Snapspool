@@ -11,21 +11,17 @@ protocol PasteEventAuthorizing {
 final class SystemPasteEventAuthorization: PasteEventAuthorizing {
     static let shared = SystemPasteEventAuthorization()
     static let recheckInterval: TimeInterval = 0.5
-    private static let inactiveDismissalConfirmationInterval: TimeInterval = 1.0
+    private static let permissionDialogBundleIdentifier =
+        "com.apple.accessibility.universalAccessAuthWarn"
 
     private let preflightAccess: () -> Bool
     private let requestSystemAccess: () -> Bool
     private let scheduleRecheck: (TimeInterval, @escaping @MainActor () -> Void) -> Void
-    private let isApplicationActive: () -> Bool
-    private let frontmostApplicationProcessIdentifier: () -> pid_t?
-    private let currentTime: () -> TimeInterval
+    private let isSystemDialogVisible: () -> Bool
     private let workspaceNotificationCenter: NotificationCenter
     private var completions: [(Bool) -> Void] = []
     private var isWaitingForSystemDialog = false
     private var isObservingDialogDismissal = false
-    private var applicationActiveBeforeRequest: pid_t?
-    private var inactiveActivationCandidate: pid_t?
-    private var inactiveActivationTime: TimeInterval?
 
     init(
         preflightAccess: @escaping () -> Bool = { CGPreflightPostEventAccess() },
@@ -36,19 +32,15 @@ final class SystemPasteEventAuthorization: PasteEventAuthorizing {
                 completion()
             }
         },
-        isApplicationActive: @escaping () -> Bool = { NSApp?.isActive ?? false },
-        frontmostApplicationProcessIdentifier: @escaping () -> pid_t? = {
-            NSWorkspace.shared.frontmostApplication?.processIdentifier
+        isSystemDialogVisible: @escaping () -> Bool = {
+            SystemPasteEventAuthorization.accessibilityPermissionDialogIsVisible()
         },
-        currentTime: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
         workspaceNotificationCenter: NotificationCenter = NSWorkspace.shared.notificationCenter
     ) {
         self.preflightAccess = preflightAccess
         self.requestSystemAccess = requestSystemAccess
         self.scheduleRecheck = scheduleRecheck
-        self.isApplicationActive = isApplicationActive
-        self.frontmostApplicationProcessIdentifier = frontmostApplicationProcessIdentifier
-        self.currentTime = currentTime
+        self.isSystemDialogVisible = isSystemDialogVisible
         self.workspaceNotificationCenter = workspaceNotificationCenter
     }
 
@@ -62,7 +54,6 @@ final class SystemPasteEventAuthorization: PasteEventAuthorizing {
         guard !isWaitingForSystemDialog else { return }
 
         isWaitingForSystemDialog = true
-        applicationActiveBeforeRequest = frontmostApplicationProcessIdentifier()
         observeDialogDismissal()
 
         if requestSystemAccess() {
@@ -83,21 +74,16 @@ final class SystemPasteEventAuthorization: PasteEventAuthorizing {
 
         if preflightAccess() {
             finishRequest(isAuthorized: true)
-        } else if isApplicationActive() {
+        } else if isSystemDialogVisible() {
+            // App activation notifications can be emitted while the system
+            // permission dialog is still on screen. Its actual window, not
+            // elapsed time after such a notification, decides when waiting
+            // may end.
+            scheduleNextRecheck()
+        } else {
             // No system prompt is in front of the application, so an app-side
             // explanation can be shown without covering the system UI.
             finishRequest(isAuthorized: false)
-        } else if inactiveActivationCandidate != nil, let inactiveActivationTime {
-            if currentTime() - inactiveActivationTime >= Self.inactiveDismissalConfirmationInterval {
-                finishRequest(isAuthorized: false)
-            } else {
-                scheduleNextRecheck()
-            }
-        } else {
-            // The system prompt owns focus. Keep polling for a grant. The
-            // observer was installed before requesting access so it cannot
-            // miss a fast dismissal and restoration of the previous app.
-            scheduleNextRecheck()
         }
     }
 
@@ -119,33 +105,34 @@ final class SystemPasteEventAuthorization: PasteEventAuthorizing {
             return
         }
 
-        let activatedApplication = notification.userInfo?[NSWorkspace.applicationUserInfoKey]
-            as? NSRunningApplication
-        let restoredPreviousApplication: Bool
-        if let activatedProcessIdentifier = activatedApplication?.processIdentifier,
-           let applicationActiveBeforeRequest {
-            restoredPreviousApplication = activatedProcessIdentifier == applicationActiveBeforeRequest
-        } else {
-            restoredPreviousApplication = false
+        if isSystemDialogVisible() {
+            return
         }
 
-        // An unrelated application can be activated while the system prompt
-        // is still visible, so that notification alone must not complete the
-        // request. If focus stays there, polling confirms the transition and
-        // also covers requests where the pre-prompt frontmost PID was unknown.
-        if isApplicationActive() || restoredPreviousApplication {
-            finishRequest(isAuthorized: false)
-        } else if let activatedProcessIdentifier = activatedApplication?.processIdentifier {
-            inactiveActivationCandidate = activatedProcessIdentifier
-            inactiveActivationTime = currentTime()
+        finishRequest(isAuthorized: false)
+    }
+
+    private static func accessibilityPermissionDialogIsVisible() -> Bool {
+        guard let windowInfo = CGWindowListCopyWindowInfo(
+            [.optionOnScreenOnly, .excludeDesktopElements],
+            kCGNullWindowID
+        ) as? [[String: Any]] else {
+            // Failure to inspect WindowServer state must not cause an app
+            // alert to be placed over a permission dialog that may be open.
+            return true
+        }
+
+        return windowInfo.contains { window in
+            guard let ownerPID = window[kCGWindowOwnerPID as String] as? NSNumber else {
+                return false
+            }
+            return NSRunningApplication(processIdentifier: pid_t(ownerPID.int32Value))?
+                .bundleIdentifier == permissionDialogBundleIdentifier
         }
     }
 
     private func finishRequest(isAuthorized: Bool) {
         isWaitingForSystemDialog = false
-        applicationActiveBeforeRequest = nil
-        inactiveActivationCandidate = nil
-        inactiveActivationTime = nil
         if isObservingDialogDismissal {
             workspaceNotificationCenter.removeObserver(
                 self,
