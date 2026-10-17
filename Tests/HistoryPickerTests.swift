@@ -197,6 +197,26 @@ final class HistoryPickerTests: XCTestCase {
         XCTAssertEqual(HistoryPickerLayout.contentSize(for: model).height, 480)
     }
 
+    func testFiveImageRowsFitCompletelyWithinMaximumPickerHeight() {
+        let thumbnail = makeThumbnail(pixelsWide: 256, pixelsHigh: 256)
+        let entries = (0..<5).map { index in
+            HistoryEntry(
+                content: .image(ImageHistoryEntry(
+                    fileURL: URL(fileURLWithPath: "/tmp/image-\(index).png"),
+                    isFallback: false,
+                    thumbnail: thumbnail
+                )),
+                detectionOrder: UInt64(index)
+            )
+        }
+        let model = HistoryPickerModel(entries: entries)
+
+        XCTAssertLessThan(
+            HistoryPickerLayout.contentSize(for: model).height,
+            HistoryPickerLayout.maximumHeight
+        )
+    }
+
     func testControllerResizesPanelFromCurrentStoreContentsBeforeShowing() {
         let temporaryDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -280,6 +300,34 @@ final class HistoryPickerTests: XCTestCase {
         XCTAssertEqual(representation.pixelsHigh, 128)
     }
 
+    func testThumbnailDisplayDoesNotUpscaleGeneratedPixelsOnRetinaDisplay() {
+        let thumbnail = makeThumbnail(pixelsWide: 256, pixelsHigh: 128)
+
+        let displaySize = HistoryPickerLayout.thumbnailDisplaySize(
+            for: thumbnail,
+            backingScaleFactor: 2
+        )
+
+        XCTAssertLessThanOrEqual(displaySize.width * 2, 256)
+        XCTAssertLessThanOrEqual(displaySize.height * 2, 128)
+        XCTAssertEqual(displaySize.width / displaySize.height, 2, accuracy: 0.001)
+        XCTAssertLessThanOrEqual(
+            max(displaySize.width, displaySize.height),
+            HistoryPickerLayout.maximumThumbnailPointLength
+        )
+    }
+
+    func testSmallThumbnailIsNotUpscaledBeyondItsGeneratedPixels() {
+        let thumbnail = makeThumbnail(pixelsWide: 32, pixelsHigh: 16)
+
+        let displaySize = HistoryPickerLayout.thumbnailDisplaySize(
+            for: thumbnail,
+            backingScaleFactor: 2
+        )
+
+        XCTAssertEqual(displaySize, NSSize(width: 16, height: 8))
+    }
+
     func testPickerUsesPrecomputedThumbnailWithoutReadingSavedFile() {
         let thumbnail = NSImage(size: NSSize(width: 32, height: 16))
         let entry = HistoryEntry(
@@ -294,6 +342,24 @@ final class HistoryPickerTests: XCTestCase {
         let model = HistoryPickerModel(entries: [entry])
 
         XCTAssertTrue(model.thumbnails[entry.id] === thumbnail)
+    }
+
+    private func makeThumbnail(pixelsWide: Int, pixelsHigh: Int) -> NSImage {
+        let bitmap = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: pixelsWide,
+            pixelsHigh: pixelsHigh,
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: 0,
+            bitsPerPixel: 0
+        )!
+        let image = NSImage(size: NSSize(width: pixelsWide, height: pixelsHigh))
+        image.addRepresentation(bitmap)
+        return image
     }
 }
 

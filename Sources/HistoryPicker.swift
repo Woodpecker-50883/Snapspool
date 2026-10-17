@@ -160,14 +160,16 @@ enum HistoryThumbnail {
 enum HistoryPickerLayout {
     static let width: CGFloat = 420
     static let maximumHeight: CGFloat = 480
+    static let maximumThumbnailPointLength: CGFloat = 56
 
     private static let headerHeight: CGFloat = 61
     private static let footerHeight: CGFloat = 37
     private static let dividerHeight: CGFloat = 1
     private static let verticalListPadding: CGFloat = 16
     private static let rowSpacing: CGFloat = 4
-    private static let textRowHeight: CGFloat = 33
-    private static let missingImageRowHeight: CGFloat = 64
+    private static let rowVerticalPadding: CGFloat = 8
+    private static let textRowHeight: CGFloat = 25
+    private static let missingImageRowHeight: CGFloat = 56
     private static let emptyListHeight: CGFloat = 64
 
     static func contentSize(for model: HistoryPickerModel) -> NSSize {
@@ -175,11 +177,44 @@ enum HistoryPickerLayout {
     }
 
     static func listHeight(for model: HistoryPickerModel) -> CGFloat {
-        let availableHeight = maximumHeight
+        let availableHeight = availableListHeight
+        return min(desiredListHeight(for: model), availableHeight)
+    }
+
+    static func thumbnailDisplaySize(
+        for thumbnail: NSImage,
+        backingScaleFactor: CGFloat
+    ) -> NSSize {
+        let scaleFactor = max(1, backingScaleFactor)
+        let pixelSize: NSSize
+        if let representation = thumbnail.representations.max(by: {
+            ($0.pixelsWide * $0.pixelsHigh) < ($1.pixelsWide * $1.pixelsHigh)
+        }), representation.pixelsWide > 0, representation.pixelsHigh > 0 {
+            pixelSize = NSSize(
+                width: representation.pixelsWide,
+                height: representation.pixelsHigh
+            )
+        } else {
+            pixelSize = thumbnail.size
+        }
+
+        guard pixelSize.width > 0, pixelSize.height > 0 else { return .zero }
+        let maximumPixelLengthAtScale = maximumThumbnailPointLength * scaleFactor
+        let fitScale = min(
+            1,
+            maximumPixelLengthAtScale / max(pixelSize.width, pixelSize.height)
+        )
+        return NSSize(
+            width: pixelSize.width * fitScale / scaleFactor,
+            height: pixelSize.height * fitScale / scaleFactor
+        )
+    }
+
+    private static var availableListHeight: CGFloat {
+        maximumHeight
             - headerHeight
             - footerHeight
             - (dividerHeight * 2)
-        return min(desiredListHeight(for: model), availableHeight)
     }
 
     private static func contentHeight(for model: HistoryPickerModel) -> CGFloat {
@@ -210,13 +245,14 @@ enum HistoryPickerLayout {
             guard let thumbnail = thumbnails[entry.id] else {
                 return missingImageRowHeight
             }
-            return min(CGFloat(HistoryThumbnail.maximumPixelLength), thumbnail.size.height) + 16
+            return min(maximumThumbnailPointLength, thumbnail.size.height) + rowVerticalPadding
         }
     }
 }
 
 struct HistoryPickerView: View {
     @ObservedObject var model: HistoryPickerModel
+    @Environment(\.displayScale) private var displayScale
 
     var body: some View {
         VStack(spacing: 0) {
@@ -297,10 +333,14 @@ struct HistoryPickerView: View {
                 switch entry.content {
                 case .image:
                     if let thumbnail = model.thumbnails[entry.id] {
+                        let displaySize = HistoryPickerLayout.thumbnailDisplaySize(
+                            for: thumbnail,
+                            backingScaleFactor: displayScale
+                        )
                         Image(nsImage: thumbnail)
                             .resizable()
                             .scaledToFit()
-                            .frame(maxWidth: 256, maxHeight: 256)
+                            .frame(width: displaySize.width, height: displaySize.height)
                     } else {
                         Image(systemName: "photo")
                             .frame(width: 48, height: 48)
@@ -311,7 +351,8 @@ struct HistoryPickerView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-            .padding(8)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 entry.id == model.selectedID
