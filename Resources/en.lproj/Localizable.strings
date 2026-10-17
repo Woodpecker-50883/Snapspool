@@ -31,7 +31,7 @@
 "autopaste.permission-enabled-title" = "Automatic Paste Enabled";
 "autopaste.permission-enabled-message" = "Snapspool now has access. Automatic paste is ready to use.";
 "autopaste.permission-not-active-title" = "Access Is Not Active Yet";
-"autopaste.permission-not-active-message" = "If you turned on Snapspool in Accessibility Settings, macOS may require Snapspool to restart before the change takes effect. You can restart it now with the button below.";
+"autopaste.permission-not-active-message" = "If you turned on Snapspool in Accessibility Settings, macOS may require Snapspool to restart before the change takes effect.\n\nRestarting clears the current image and text history. Image files already saved in the destination folder will remain. Choose Not Now to keep the current history.";
 "autopaste.restart" = "Restart Snapspool";
 "autopaste.not-now" = "Not Now";
 "autopaste.restart-failed-title" = "Snapspool Could Not Restart Itself";

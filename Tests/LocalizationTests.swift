@@ -106,8 +106,8 @@ final class LocalizationTests: XCTestCase {
             "権限がまだ反映されていません"
         ),
         "autopaste.permission-not-active-message": (
-            "If you turned on Snapspool in Accessibility Settings, macOS may require Snapspool to restart before the change takes effect. You can restart it now with the button below.",
-            "アクセシビリティ設定でSnapspoolを有効にした場合、反映するためにmacOSがSnapspoolの再起動を必要とすることがあります。下のボタンで今すぐ再起動できます。"
+            "If you turned on Snapspool in Accessibility Settings, macOS may require Snapspool to restart before the change takes effect.\n\nRestarting clears the current image and text history. Image files already saved in the destination folder will remain. Choose Not Now to keep the current history.",
+            "アクセシビリティ設定でSnapspoolを有効にした場合、反映するためにmacOSがSnapspoolの再起動を必要とすることがあります。\n\n再起動すると、現在の画像とテキストの履歴は消えます。保存先フォルダに保存済みの画像ファイルは残ります。「後で」を選ぶと現在の履歴を維持できます。"
         ),
         "autopaste.restart": ("Restart Snapspool", "Snapspoolを再起動"),
         "autopaste.not-now": ("Not Now", "後で"),

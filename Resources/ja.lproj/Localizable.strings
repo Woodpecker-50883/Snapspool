@@ -31,7 +31,7 @@
 "autopaste.permission-enabled-title" = "自動貼り付けが有効になりました";
 "autopaste.permission-enabled-message" = "Snapspoolへのアクセスが許可されました。自動貼り付けを利用できます。";
 "autopaste.permission-not-active-title" = "権限がまだ反映されていません";
-"autopaste.permission-not-active-message" = "アクセシビリティ設定でSnapspoolを有効にした場合、反映するためにmacOSがSnapspoolの再起動を必要とすることがあります。下のボタンで今すぐ再起動できます。";
+"autopaste.permission-not-active-message" = "アクセシビリティ設定でSnapspoolを有効にした場合、反映するためにmacOSがSnapspoolの再起動を必要とすることがあります。\n\n再起動すると、現在の画像とテキストの履歴は消えます。保存先フォルダに保存済みの画像ファイルは残ります。「後で」を選ぶと現在の履歴を維持できます。";
 "autopaste.restart" = "Snapspoolを再起動";
 "autopaste.not-now" = "後で";
 "autopaste.restart-failed-title" = "Snapspoolを自動で再起動できませんでした";

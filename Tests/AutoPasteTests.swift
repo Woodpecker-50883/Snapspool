@@ -300,9 +300,50 @@ final class AutoPasteTests: XCTestCase {
             displayedAlerts.last?.buttons.map(\.title),
             [L10n.string("autopaste.restart"), L10n.string("autopaste.not-now")]
         )
+        XCTAssertEqual(
+            displayedAlerts.last?.informativeText,
+            L10n.string("autopaste.permission-not-active-message")
+        )
         XCTAssertEqual(relaunchedURLs, [applicationURL])
         XCTAssertEqual(terminationCount, 1)
         XCTAssertEqual(relaunchSequence, ["unregister", "launch", "terminate"])
+    }
+
+    func testNotNowKeepsCurrentHistoryByLeavingApplicationRunning() {
+        let notificationCenter = NotificationCenter()
+        var displayedAlerts: [NSAlert] = []
+        var relaunchSequence: [String] = []
+        let notifier = SystemAutoPasteNotifier(
+            openURL: { _ in true },
+            runAlert: {
+                displayedAlerts.append($0)
+                return displayedAlerts.count == 1
+                    ? .alertFirstButtonReturn
+                    : .alertSecondButtonReturn
+            },
+            isAuthorized: { false },
+            notificationCenter: notificationCenter,
+            prepareForRelaunch: { relaunchSequence.append("unregister") },
+            relaunchApplication: { _ in
+                relaunchSequence.append("launch")
+                return true
+            },
+            recoverFromFailedRelaunch: { relaunchSequence.append("recover") },
+            terminateCurrentApplication: { relaunchSequence.append("terminate") }
+        )
+
+        notifier.notifyManualPasteRequired()
+        notificationCenter.post(name: NSApplication.didBecomeActiveNotification, object: nil)
+
+        XCTAssertEqual(displayedAlerts.count, 2)
+        XCTAssertEqual(
+            displayedAlerts.last?.informativeText,
+            L10n.string("autopaste.permission-not-active-message")
+        )
+        XCTAssertTrue(
+            relaunchSequence.isEmpty,
+            "Choosing Not Now must keep the process and its in-memory history alive"
+        )
     }
 
     func testRelaunchedInstanceRechecksPermissionAndShowsThatAutoPasteIsReady() {
