@@ -183,94 +183,92 @@ final class AutoPasteTests: XCTestCase {
         XCTAssertTrue(displayedAlerts.isEmpty)
     }
 
-    func testSystemAuthorizationWaitsForDialogToCloseBeforeReportingDenial() {
-        let notificationCenter = NotificationCenter()
-        var authorizationResult: Bool?
-        let authorization = SystemPasteEventAuthorization(
-            preflightAccess: { false },
-            requestSystemAccess: { false },
-            notificationCenter: notificationCenter
-        )
-
-        authorization.requestAccess { authorizationResult = $0 }
-        XCTAssertNil(authorizationResult)
-
-        notificationCenter.post(name: NSApplication.didBecomeActiveNotification, object: nil)
-        XCTAssertNil(authorizationResult, "An unrelated activation must not finish the request")
-
-        notificationCenter.post(name: NSApplication.didResignActiveNotification, object: nil)
-        XCTAssertNil(authorizationResult)
-
-        notificationCenter.post(name: NSApplication.didBecomeActiveNotification, object: nil)
-        XCTAssertEqual(authorizationResult, false)
-    }
-
-    func testSystemAuthorizationReportsGrantOnlyAfterDialogCloses() {
-        let notificationCenter = NotificationCenter()
+    func testSystemAuthorizationPollsPreflightOftenEnoughToDetectGrantWithinThreeSeconds() {
+        var scheduledRecheck: (@MainActor () -> Void)?
+        var scheduledInterval: TimeInterval?
         var isAuthorized = false
         var authorizationResult: Bool?
         let authorization = SystemPasteEventAuthorization(
             preflightAccess: { isAuthorized },
             requestSystemAccess: { false },
-            notificationCenter: notificationCenter
+            scheduleRecheck: { interval, recheck in
+                scheduledInterval = interval
+                scheduledRecheck = recheck
+            },
+            isApplicationActive: { false }
         )
 
         authorization.requestAccess { authorizationResult = $0 }
-        notificationCenter.post(name: NSApplication.didResignActiveNotification, object: nil)
-        isAuthorized = true
         XCTAssertNil(authorizationResult)
+        XCTAssertNotNil(scheduledRecheck)
+        XCTAssertEqual(scheduledInterval, 0.5)
 
-        notificationCenter.post(name: NSApplication.didBecomeActiveNotification, object: nil)
+        isAuthorized = true
+        scheduledRecheck?()
+
         XCTAssertEqual(authorizationResult, true)
     }
 
+    func testSystemAuthorizationCompletesEveryRequestThatArrivesWhilePolling() {
+        var scheduledRecheck: (@MainActor () -> Void)?
+        var isAuthorized = false
+        var authorizationResults: [Bool] = []
+        let authorization = SystemPasteEventAuthorization(
+            preflightAccess: { isAuthorized },
+            requestSystemAccess: { false },
+            scheduleRecheck: { _, recheck in scheduledRecheck = recheck },
+            isApplicationActive: { false }
+        )
+
+        authorization.requestAccess { authorizationResults.append($0) }
+        authorization.requestAccess { authorizationResults.append($0) }
+        XCTAssertTrue(authorizationResults.isEmpty)
+
+        isAuthorized = true
+        scheduledRecheck?()
+
+        XCTAssertEqual(authorizationResults, [true, true])
+    }
+
     func testSystemAuthorizationCompletesWhenSystemDoesNotShowPermissionDialog() {
-        let notificationCenter = NotificationCenter()
-        var scheduledFallback: (@MainActor () -> Void)?
+        var scheduledRecheck: (@MainActor () -> Void)?
         var authorizationResult: Bool?
         let authorization = SystemPasteEventAuthorization(
             preflightAccess: { false },
             requestSystemAccess: { false },
-            notificationCenter: notificationCenter,
-            scheduleNoDialogFallback: { scheduledFallback = $0 },
+            scheduleRecheck: { _, recheck in scheduledRecheck = recheck },
             isApplicationActive: { true }
         )
 
         authorization.requestAccess { authorizationResult = $0 }
-        XCTAssertNil(authorizationResult)
-        XCTAssertNotNil(scheduledFallback)
-
-        scheduledFallback?()
+        scheduledRecheck?()
 
         XCTAssertEqual(authorizationResult, false)
     }
 
-    func testSystemAuthorizationKeepsWaitingWhileSystemDialogHasFocus() {
-        let notificationCenter = NotificationCenter()
-        var scheduledFallback: (@MainActor () -> Void)?
+    func testSystemAuthorizationKeepsPollingWithoutCompletingWhileSystemDialogHasFocus() {
+        var scheduledRechecks: [(@MainActor () -> Void)] = []
         var authorizationResult: Bool?
-        var isActive = true
         let authorization = SystemPasteEventAuthorization(
             preflightAccess: { false },
             requestSystemAccess: { false },
-            notificationCenter: notificationCenter,
-            scheduleNoDialogFallback: { scheduledFallback = $0 },
-            isApplicationActive: { isActive }
+            scheduleRecheck: { _, recheck in scheduledRechecks.append(recheck) },
+            isApplicationActive: { false }
         )
 
         authorization.requestAccess { authorizationResult = $0 }
-        // OSの権限ダイアログが前面を奪っている状態
-        isActive = false
-        scheduledFallback?()
+        XCTAssertEqual(scheduledRechecks.count, 1)
+        scheduledRechecks.removeFirst()()
 
         XCTAssertNil(
             authorizationResult,
             "OSの権限ダイアログが出ている間に権限要求を打ち切ると、アプリの案内が重なって表示される"
         )
+        XCTAssertEqual(scheduledRechecks.count, 1, "Polling must continue until the system dialog closes")
     }
 
     func testReturningFromSettingsRechecksPermissionAndShowsThatAutoPasteIsReady() {
-        let notificationCenter = NotificationCenter()
+        var scheduledRecheck: (@MainActor () -> Void)?
         var authorizationChecks = 0
         var displayedAlerts: [NSAlert] = []
         let notifier = SystemAutoPasteNotifier(
@@ -283,11 +281,11 @@ final class AutoPasteTests: XCTestCase {
                 authorizationChecks += 1
                 return true
             },
-            notificationCenter: notificationCenter
+            schedulePermissionRecheck: { _, recheck in scheduledRecheck = recheck }
         )
 
         notifier.notifyManualPasteRequired()
-        notificationCenter.post(name: NSApplication.didBecomeActiveNotification, object: nil)
+        scheduledRecheck?()
 
         XCTAssertEqual(authorizationChecks, 1)
         XCTAssertEqual(displayedAlerts.count, 2)
@@ -300,15 +298,51 @@ final class AutoPasteTests: XCTestCase {
             L10n.string("autopaste.permission-enabled-message")
         )
 
-        notificationCenter.post(name: NSApplication.didBecomeActiveNotification, object: nil)
+        scheduledRecheck?()
         XCTAssertEqual(authorizationChecks, 1, "Permission should be checked once per trip to Settings")
+    }
+
+    func testSettingsPermissionIsPolledAndDetectedWithoutApplicationActivation() {
+        var scheduledRechecks: [(@MainActor () -> Void)] = []
+        var scheduledIntervals: [TimeInterval] = []
+        var isAuthorized = false
+        var displayedAlerts: [NSAlert] = []
+        let notifier = SystemAutoPasteNotifier(
+            openURL: { _ in true },
+            runAlert: {
+                displayedAlerts.append($0)
+                return displayedAlerts.count == 1 ? .alertFirstButtonReturn : .alertSecondButtonReturn
+            },
+            isAuthorized: { isAuthorized },
+            schedulePermissionRecheck: { interval, recheck in
+                scheduledIntervals.append(interval)
+                scheduledRechecks.append(recheck)
+            }
+        )
+
+        notifier.notifyManualPasteRequired()
+        XCTAssertEqual(scheduledRechecks.count, 1)
+        XCTAssertEqual(scheduledIntervals[0], 0.5)
+
+        scheduledRechecks.removeFirst()()
+        XCTAssertEqual(displayedAlerts.count, 1, "No app modal may cover the system UI while access is pending")
+        XCTAssertEqual(scheduledRechecks.count, 1)
+
+        isAuthorized = true
+        scheduledRechecks.removeFirst()()
+
+        XCTAssertEqual(displayedAlerts.count, 2)
+        XCTAssertEqual(
+            displayedAlerts.last?.messageText,
+            L10n.string("autopaste.permission-enabled-title")
+        )
     }
 
     func testRestartButtonRelaunchesApplicationAndTerminatesCurrentInstance() {
         let suiteName = "AutoPasteTests.restart.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defer { defaults.removePersistentDomain(forName: suiteName) }
-        let notificationCenter = NotificationCenter()
+        var scheduledRecheck: (@MainActor () -> Void)?
         let applicationURL = URL(fileURLWithPath: "/Applications/Snapspool.app")
         var relaunchedURLs: [URL] = []
         var terminationCount = 0
@@ -321,7 +355,8 @@ final class AutoPasteTests: XCTestCase {
                 return .alertFirstButtonReturn
             },
             isAuthorized: { false },
-            notificationCenter: notificationCenter,
+            isApplicationActive: { true },
+            schedulePermissionRecheck: { _, recheck in scheduledRecheck = recheck },
             defaults: defaults,
             applicationURL: applicationURL,
             prepareForRelaunch: { relaunchSequence.append("unregister") },
@@ -338,7 +373,7 @@ final class AutoPasteTests: XCTestCase {
         )
 
         notifier.notifyManualPasteRequired()
-        notificationCenter.post(name: NSApplication.didBecomeActiveNotification, object: nil)
+        scheduledRecheck?()
 
         XCTAssertEqual(displayedAlerts.count, 2)
         XCTAssertEqual(
@@ -355,7 +390,7 @@ final class AutoPasteTests: XCTestCase {
     }
 
     func testNotNowKeepsCurrentHistoryByLeavingApplicationRunning() {
-        let notificationCenter = NotificationCenter()
+        var scheduledRecheck: (@MainActor () -> Void)?
         var displayedAlerts: [NSAlert] = []
         var relaunchSequence: [String] = []
         let notifier = SystemAutoPasteNotifier(
@@ -367,7 +402,8 @@ final class AutoPasteTests: XCTestCase {
                     : .alertSecondButtonReturn
             },
             isAuthorized: { false },
-            notificationCenter: notificationCenter,
+            isApplicationActive: { true },
+            schedulePermissionRecheck: { _, recheck in scheduledRecheck = recheck },
             prepareForRelaunch: { relaunchSequence.append("unregister") },
             relaunchApplication: { _ in
                 relaunchSequence.append("launch")
@@ -378,7 +414,7 @@ final class AutoPasteTests: XCTestCase {
         )
 
         notifier.notifyManualPasteRequired()
-        notificationCenter.post(name: NSApplication.didBecomeActiveNotification, object: nil)
+        scheduledRecheck?()
 
         XCTAssertEqual(displayedAlerts.count, 2)
         XCTAssertEqual(
@@ -395,7 +431,7 @@ final class AutoPasteTests: XCTestCase {
         let suiteName = "AutoPasteTests.permissionRelaunch.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defer { defaults.removePersistentDomain(forName: suiteName) }
-        let notificationCenter = NotificationCenter()
+        var scheduledRecheck: (@MainActor () -> Void)?
         var terminationCount = 0
         var oldInstanceAlerts: [NSAlert] = []
         let oldInstance = SystemAutoPasteNotifier(
@@ -405,14 +441,15 @@ final class AutoPasteTests: XCTestCase {
                 return .alertFirstButtonReturn
             },
             isAuthorized: { false },
-            notificationCenter: notificationCenter,
+            isApplicationActive: { true },
+            schedulePermissionRecheck: { _, recheck in scheduledRecheck = recheck },
             defaults: defaults,
             relaunchApplication: { _ in true },
             terminateCurrentApplication: { terminationCount += 1 }
         )
 
         oldInstance.notifyManualPasteRequired()
-        notificationCenter.post(name: NSApplication.didBecomeActiveNotification, object: nil)
+        scheduledRecheck?()
 
         var authorizationChecks = 0
         var newInstanceAlerts: [NSAlert] = []
@@ -425,7 +462,6 @@ final class AutoPasteTests: XCTestCase {
                 authorizationChecks += 1
                 return true
             },
-            notificationCenter: NotificationCenter(),
             defaults: defaults
         )
 
@@ -448,7 +484,6 @@ final class AutoPasteTests: XCTestCase {
                 laterAuthorizationChecks += 1
                 return true
             },
-            notificationCenter: NotificationCenter(),
             defaults: defaults
         )
         XCTAssertEqual(laterAuthorizationChecks, 0)
@@ -458,7 +493,7 @@ final class AutoPasteTests: XCTestCase {
         let suiteName = "AutoPasteTests.failedRestart.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defer { defaults.removePersistentDomain(forName: suiteName) }
-        let notificationCenter = NotificationCenter()
+        var scheduledRecheck: (@MainActor () -> Void)?
         var displayedAlerts: [NSAlert] = []
         var terminationCount = 0
         var relaunchSequence: [String] = []
@@ -469,7 +504,8 @@ final class AutoPasteTests: XCTestCase {
                 return .alertFirstButtonReturn
             },
             isAuthorized: { false },
-            notificationCenter: notificationCenter,
+            isApplicationActive: { true },
+            schedulePermissionRecheck: { _, recheck in scheduledRecheck = recheck },
             defaults: defaults,
             prepareForRelaunch: { relaunchSequence.append("unregister") },
             relaunchApplication: { _ in
@@ -481,7 +517,7 @@ final class AutoPasteTests: XCTestCase {
         )
 
         notifier.notifyManualPasteRequired()
-        notificationCenter.post(name: NSApplication.didBecomeActiveNotification, object: nil)
+        scheduledRecheck?()
 
         XCTAssertEqual(displayedAlerts.count, 3)
         XCTAssertEqual(
@@ -500,7 +536,7 @@ final class AutoPasteTests: XCTestCase {
         let suiteName = "AutoPasteTests.hotKeyHandoff.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defer { defaults.removePersistentDomain(forName: suiteName) }
-        let notificationCenter = NotificationCenter()
+        var scheduledRecheck: (@MainActor () -> Void)?
         let shortcut = GlobalShortcut(
             keyCode: UInt32(kVK_ANSI_B),
             modifiers: UInt32(controlKey)
@@ -521,7 +557,8 @@ final class AutoPasteTests: XCTestCase {
             openURL: { _ in true },
             runAlert: { _ in .alertFirstButtonReturn },
             isAuthorized: { false },
-            notificationCenter: notificationCenter,
+            isApplicationActive: { true },
+            schedulePermissionRecheck: { _, recheck in scheduledRecheck = recheck },
             defaults: defaults,
             prepareForRelaunch: { oldController.stop() },
             relaunchApplication: { _ in
@@ -539,7 +576,7 @@ final class AutoPasteTests: XCTestCase {
         )
 
         notifier.notifyManualPasteRequired()
-        notificationCenter.post(name: NSApplication.didBecomeActiveNotification, object: nil)
+        scheduledRecheck?()
 
         XCTAssertNotNil(newController)
         XCTAssertEqual(sharedRegistration.registeredShortcut, shortcut)

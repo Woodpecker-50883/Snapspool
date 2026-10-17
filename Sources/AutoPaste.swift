@@ -10,27 +10,21 @@ protocol PasteEventAuthorizing {
 @MainActor
 final class SystemPasteEventAuthorization: PasteEventAuthorizing {
     static let shared = SystemPasteEventAuthorization()
+    static let recheckInterval: TimeInterval = 0.5
 
     private let preflightAccess: () -> Bool
     private let requestSystemAccess: () -> Bool
-    private let notificationCenter: NotificationCenter
-    private let scheduleNoDialogFallback: (@escaping @MainActor () -> Void) -> Void
+    private let scheduleRecheck: (TimeInterval, @escaping @MainActor () -> Void) -> Void
     private let isApplicationActive: () -> Bool
     private var completions: [(Bool) -> Void] = []
     private var isWaitingForSystemDialog = false
-    private var didResignWhileWaiting = false
 
     init(
         preflightAccess: @escaping () -> Bool = { CGPreflightPostEventAccess() },
         requestSystemAccess: @escaping () -> Bool = { CGRequestPostEventAccess() },
-        notificationCenter: NotificationCenter = .default,
-        // `CGRequestPostEventAccess()` はOSのダイアログを表示している最中も false を返す。
-        // 戻り値からは「ダイアログが出なかった」を判別できないため、
-        // 十分に待ってもアプリが前面のまま（＝OSのダイアログが出ていない）のときだけ、
-        // 拒否済みとみなしてアプリ側の案内へ進む
-        scheduleNoDialogFallback: @escaping (@escaping @MainActor () -> Void) -> Void = { completion in
+        scheduleRecheck: @escaping (TimeInterval, @escaping @MainActor () -> Void) -> Void = { interval, completion in
             Task { @MainActor in
-                try? await Task.sleep(for: .seconds(10))
+                try? await Task.sleep(for: .seconds(interval))
                 completion()
             }
         },
@@ -38,13 +32,8 @@ final class SystemPasteEventAuthorization: PasteEventAuthorizing {
     ) {
         self.preflightAccess = preflightAccess
         self.requestSystemAccess = requestSystemAccess
-        self.notificationCenter = notificationCenter
-        self.scheduleNoDialogFallback = scheduleNoDialogFallback
+        self.scheduleRecheck = scheduleRecheck
         self.isApplicationActive = isApplicationActive
-    }
-
-    deinit {
-        notificationCenter.removeObserver(self)
     }
 
     func requestAccess(completion: @escaping (Bool) -> Void) {
@@ -57,58 +46,38 @@ final class SystemPasteEventAuthorization: PasteEventAuthorizing {
         guard !isWaitingForSystemDialog else { return }
 
         isWaitingForSystemDialog = true
-        didResignWhileWaiting = false
-        notificationCenter.addObserver(
-            self,
-            selector: #selector(applicationDidResignWhileRequestingAccess),
-            name: NSApplication.didResignActiveNotification,
-            object: nil
-        )
-        notificationCenter.addObserver(
-            self,
-            selector: #selector(applicationDidReturnAfterRequestingAccess),
-            name: NSApplication.didBecomeActiveNotification,
-            object: nil
-        )
 
         if requestSystemAccess() {
             finishRequest(isAuthorized: true)
         } else {
-            scheduleNoDialogFallback { [weak self] in
-                guard let self,
-                      self.isWaitingForSystemDialog,
-                      !self.didResignWhileWaiting,
-                      // 前面を奪われていない＝OSのダイアログは出ていない。
-                      // 出ている場合に案内を重ねないための条件
-                      self.isApplicationActive() else { return }
-                self.finishRequest(isAuthorized: self.preflightAccess())
-            }
+            scheduleNextRecheck()
         }
     }
 
-    @objc private func applicationDidResignWhileRequestingAccess() {
-        guard isWaitingForSystemDialog else { return }
-        didResignWhileWaiting = true
+    private func scheduleNextRecheck() {
+        scheduleRecheck(Self.recheckInterval) { [weak self] in
+            self?.recheckAccess()
+        }
     }
 
-    @objc private func applicationDidReturnAfterRequestingAccess() {
-        guard isWaitingForSystemDialog, didResignWhileWaiting else { return }
-        finishRequest(isAuthorized: preflightAccess())
+    private func recheckAccess() {
+        guard isWaitingForSystemDialog else { return }
+
+        if preflightAccess() {
+            finishRequest(isAuthorized: true)
+        } else if isApplicationActive() {
+            // No system prompt is in front of the application, so an app-side
+            // explanation can be shown without covering the system UI.
+            finishRequest(isAuthorized: false)
+        } else {
+            // The system prompt owns focus. Keep polling rather than waiting
+            // for an activation notification, which LSUIElement apps may not receive.
+            scheduleNextRecheck()
+        }
     }
 
     private func finishRequest(isAuthorized: Bool) {
         isWaitingForSystemDialog = false
-        didResignWhileWaiting = false
-        notificationCenter.removeObserver(
-            self,
-            name: NSApplication.didResignActiveNotification,
-            object: nil
-        )
-        notificationCenter.removeObserver(
-            self,
-            name: NSApplication.didBecomeActiveNotification,
-            object: nil
-        )
         let pendingCompletions = completions
         completions.removeAll()
         pendingCompletions.forEach { $0(isAuthorized) }
@@ -209,6 +178,7 @@ protocol AutoPastePermissionGuiding: AnyObject {
 final class SystemAutoPasteNotifier: NSObject, AutoPasteNotifying, AutoPastePermissionGuiding {
     private static let pendingPermissionCheckKey =
         "autopaste.pendingPermissionCheckAfterRelaunch"
+    static let permissionRecheckInterval: TimeInterval = 0.5
 
     static let accessibilitySettingsURL = URL(
         string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
@@ -218,7 +188,8 @@ final class SystemAutoPasteNotifier: NSObject, AutoPasteNotifying, AutoPastePerm
     private let runAlert: (NSAlert) -> NSApplication.ModalResponse
     private let requestAuthorization: (@escaping (Bool) -> Void) -> Void
     private let isAuthorized: () -> Bool
-    private let notificationCenter: NotificationCenter
+    private let isApplicationActive: () -> Bool
+    private let schedulePermissionRecheck: (TimeInterval, @escaping @MainActor () -> Void) -> Void
     private let defaults: UserDefaults
     private let applicationURL: URL
     private let prepareForRelaunch: () -> Void
@@ -234,7 +205,13 @@ final class SystemAutoPasteNotifier: NSObject, AutoPasteNotifying, AutoPastePerm
             SystemPasteEventAuthorization.shared.requestAccess(completion: completion)
         },
         isAuthorized: @escaping () -> Bool = { CGPreflightPostEventAccess() },
-        notificationCenter: NotificationCenter = .default,
+        isApplicationActive: @escaping () -> Bool = { NSApp?.isActive ?? false },
+        schedulePermissionRecheck: @escaping (TimeInterval, @escaping @MainActor () -> Void) -> Void = { interval, completion in
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(interval))
+                completion()
+            }
+        },
         defaults: UserDefaults = .standard,
         applicationURL: URL = Bundle.main.bundleURL,
         prepareForRelaunch: @escaping () -> Void = {},
@@ -254,7 +231,8 @@ final class SystemAutoPasteNotifier: NSObject, AutoPasteNotifying, AutoPastePerm
         self.runAlert = runAlert
         self.requestAuthorization = requestAuthorization
         self.isAuthorized = isAuthorized
-        self.notificationCenter = notificationCenter
+        self.isApplicationActive = isApplicationActive
+        self.schedulePermissionRecheck = schedulePermissionRecheck
         self.defaults = defaults
         self.applicationURL = applicationURL
         self.prepareForRelaunch = prepareForRelaunch
@@ -263,10 +241,6 @@ final class SystemAutoPasteNotifier: NSObject, AutoPasteNotifying, AutoPastePerm
         self.terminateCurrentApplication = terminateCurrentApplication
         super.init()
         checkPermissionAfterRelaunchIfNeeded()
-    }
-
-    deinit {
-        notificationCenter.removeObserver(self)
     }
 
     func notifyManualPasteRequired() {
@@ -294,31 +268,30 @@ final class SystemAutoPasteNotifier: NSObject, AutoPasteNotifying, AutoPastePerm
     private func startWaitingForSettingsReturn() {
         guard !isWaitingForSettingsReturn else { return }
         isWaitingForSettingsReturn = true
-        notificationCenter.addObserver(
-            self,
-            selector: #selector(applicationDidBecomeActive),
-            name: NSApplication.didBecomeActiveNotification,
-            object: nil
-        )
+        scheduleNextPermissionRecheck()
     }
 
     private func stopWaitingForSettingsReturn() {
         isWaitingForSettingsReturn = false
-        notificationCenter.removeObserver(
-            self,
-            name: NSApplication.didBecomeActiveNotification,
-            object: nil
-        )
     }
 
-    @objc private func applicationDidBecomeActive() {
+    private func scheduleNextPermissionRecheck() {
+        schedulePermissionRecheck(Self.permissionRecheckInterval) { [weak self] in
+            self?.recheckPermissionAfterOpeningSettings()
+        }
+    }
+
+    private func recheckPermissionAfterOpeningSettings() {
         guard isWaitingForSettingsReturn else { return }
-        stopWaitingForSettingsReturn()
 
         if isAuthorized() {
+            stopWaitingForSettingsReturn()
             showPermissionEnabledAlert()
-        } else {
+        } else if isApplicationActive() {
+            stopWaitingForSettingsReturn()
             showRestartOffer()
+        } else {
+            scheduleNextPermissionRecheck()
         }
     }
 

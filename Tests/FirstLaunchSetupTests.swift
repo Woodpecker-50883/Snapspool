@@ -93,7 +93,7 @@ final class FirstLaunchSetupTests: XCTestCase {
     func testSetupPermissionActionRequestsOSAccessAndCompletesRestartFlow() throws {
         let (defaults, suiteName) = makeIsolatedDefaults()
         defer { defaults.removePersistentDomain(forName: suiteName) }
-        let notificationCenter = NotificationCenter()
+        var scheduledPermissionRecheck: (@MainActor () -> Void)?
         var permissionRequestCount = 0
         var displayedAlerts: [NSAlert] = []
         var openedURL: URL?
@@ -112,7 +112,8 @@ final class FirstLaunchSetupTests: XCTestCase {
                 completion(false)
             },
             isAuthorized: { false },
-            notificationCenter: notificationCenter,
+            isApplicationActive: { true },
+            schedulePermissionRecheck: { _, recheck in scheduledPermissionRecheck = recheck },
             defaults: defaults,
             prepareForRelaunch: { relaunchSequence.append("prepare") },
             relaunchApplication: { _ in
@@ -135,7 +136,7 @@ final class FirstLaunchSetupTests: XCTestCase {
         XCTAssertEqual(openedURL, SystemAutoPasteNotifier.accessibilitySettingsURL)
         XCTAssertEqual(displayedAlerts.count, 1)
 
-        notificationCenter.post(name: NSApplication.didBecomeActiveNotification, object: nil)
+        scheduledPermissionRecheck?()
 
         XCTAssertEqual(displayedAlerts.count, 2)
         XCTAssertEqual(
