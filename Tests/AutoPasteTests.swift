@@ -384,6 +384,84 @@ final class AutoPasteTests: XCTestCase {
         XCTAssertNil(authorizationResult)
     }
 
+    func testSystemAuthorizationCompletesWhenInitialFrontmostPIDIsUnavailable() {
+        let workspaceNotificationCenter = NotificationCenter()
+        let activatedApplication = NSRunningApplication.current
+        var scheduledRechecks: [(@MainActor () -> Void)] = []
+        var authorizationResults: [Bool] = []
+        var currentTime: TimeInterval = 0
+        let authorization = SystemPasteEventAuthorization(
+            preflightAccess: { false },
+            requestSystemAccess: { false },
+            scheduleRecheck: { _, recheck in scheduledRechecks.append(recheck) },
+            isApplicationActive: { false },
+            frontmostApplicationProcessIdentifier: { nil },
+            currentTime: { currentTime },
+            workspaceNotificationCenter: workspaceNotificationCenter
+        )
+
+        authorization.requestAccess { authorizationResults.append($0) }
+        authorization.requestAccess { authorizationResults.append($0) }
+        workspaceNotificationCenter.post(
+            name: NSWorkspace.didActivateApplicationNotification,
+            object: nil,
+            userInfo: [NSWorkspace.applicationUserInfoKey: activatedApplication]
+        )
+
+        XCTAssertTrue(
+            authorizationResults.isEmpty,
+            "An unrelated activation must not dismiss the app-side wait while the system dialog may be visible"
+        )
+        currentTime = 0.5
+        scheduledRechecks.removeFirst()()
+        XCTAssertTrue(authorizationResults.isEmpty)
+        currentTime = 1.0
+        scheduledRechecks.removeFirst()()
+
+        XCTAssertEqual(authorizationResults, [false, false])
+    }
+
+    func testSystemAuthorizationCompletesAfterFocusMovesAndDoesNotReturnToPreviousApp() {
+        let workspaceNotificationCenter = NotificationCenter()
+        let previousApplication = NSRunningApplication.current
+        let otherApplication = NSRunningApplication.current
+        var scheduledRechecks: [(@MainActor () -> Void)] = []
+        var authorizationResultCount = 0
+        var currentTime: TimeInterval = 0
+        let authorization = SystemPasteEventAuthorization(
+            preflightAccess: { false },
+            requestSystemAccess: { false },
+            scheduleRecheck: { _, recheck in scheduledRechecks.append(recheck) },
+            isApplicationActive: { false },
+            frontmostApplicationProcessIdentifier: {
+                previousApplication.processIdentifier &+ 1
+            },
+            currentTime: { currentTime },
+            workspaceNotificationCenter: workspaceNotificationCenter
+        )
+
+        authorization.requestAccess { result in
+            XCTAssertFalse(result)
+            authorizationResultCount += 1
+        }
+        workspaceNotificationCenter.post(
+            name: NSWorkspace.didActivateApplicationNotification,
+            object: nil,
+            userInfo: [NSWorkspace.applicationUserInfoKey: otherApplication]
+        )
+
+        XCTAssertEqual(authorizationResultCount, 0)
+        currentTime = 0.5
+        scheduledRechecks.removeFirst()()
+        XCTAssertEqual(authorizationResultCount, 0)
+        currentTime = 1.0
+        scheduledRechecks.removeFirst()()
+        XCTAssertEqual(authorizationResultCount, 1)
+
+        scheduledRechecks.forEach { $0() }
+        XCTAssertEqual(authorizationResultCount, 1, "Stale polls must not invoke a completion twice")
+    }
+
     func testReturningFromSettingsRechecksPermissionAndShowsThatAutoPasteIsReady() {
         var scheduledRecheck: (@MainActor () -> Void)?
         var authorizationChecks = 0

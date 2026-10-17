@@ -11,17 +11,21 @@ protocol PasteEventAuthorizing {
 final class SystemPasteEventAuthorization: PasteEventAuthorizing {
     static let shared = SystemPasteEventAuthorization()
     static let recheckInterval: TimeInterval = 0.5
+    private static let inactiveDismissalConfirmationInterval: TimeInterval = 1.0
 
     private let preflightAccess: () -> Bool
     private let requestSystemAccess: () -> Bool
     private let scheduleRecheck: (TimeInterval, @escaping @MainActor () -> Void) -> Void
     private let isApplicationActive: () -> Bool
     private let frontmostApplicationProcessIdentifier: () -> pid_t?
+    private let currentTime: () -> TimeInterval
     private let workspaceNotificationCenter: NotificationCenter
     private var completions: [(Bool) -> Void] = []
     private var isWaitingForSystemDialog = false
     private var isObservingDialogDismissal = false
     private var applicationActiveBeforeRequest: pid_t?
+    private var inactiveActivationCandidate: pid_t?
+    private var inactiveActivationTime: TimeInterval?
 
     init(
         preflightAccess: @escaping () -> Bool = { CGPreflightPostEventAccess() },
@@ -36,6 +40,7 @@ final class SystemPasteEventAuthorization: PasteEventAuthorizing {
         frontmostApplicationProcessIdentifier: @escaping () -> pid_t? = {
             NSWorkspace.shared.frontmostApplication?.processIdentifier
         },
+        currentTime: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
         workspaceNotificationCenter: NotificationCenter = NSWorkspace.shared.notificationCenter
     ) {
         self.preflightAccess = preflightAccess
@@ -43,6 +48,7 @@ final class SystemPasteEventAuthorization: PasteEventAuthorizing {
         self.scheduleRecheck = scheduleRecheck
         self.isApplicationActive = isApplicationActive
         self.frontmostApplicationProcessIdentifier = frontmostApplicationProcessIdentifier
+        self.currentTime = currentTime
         self.workspaceNotificationCenter = workspaceNotificationCenter
     }
 
@@ -81,6 +87,12 @@ final class SystemPasteEventAuthorization: PasteEventAuthorizing {
             // No system prompt is in front of the application, so an app-side
             // explanation can be shown without covering the system UI.
             finishRequest(isAuthorized: false)
+        } else if inactiveActivationCandidate != nil, let inactiveActivationTime {
+            if currentTime() - inactiveActivationTime >= Self.inactiveDismissalConfirmationInterval {
+                finishRequest(isAuthorized: false)
+            } else {
+                scheduleNextRecheck()
+            }
         } else {
             // The system prompt owns focus. Keep polling for a grant. The
             // observer was installed before requesting access so it cannot
@@ -117,17 +129,23 @@ final class SystemPasteEventAuthorization: PasteEventAuthorizing {
             restoredPreviousApplication = false
         }
 
-        // Notifications for other applications can arrive while the system
-        // prompt is still visible. Only our own reactivation, or restoration
-        // of the application that was active before the request, proves that
-        // the prompt has gone away.
-        guard isApplicationActive() || restoredPreviousApplication else { return }
-        finishRequest(isAuthorized: false)
+        // An unrelated application can be activated while the system prompt
+        // is still visible, so that notification alone must not complete the
+        // request. If focus stays there, polling confirms the transition and
+        // also covers requests where the pre-prompt frontmost PID was unknown.
+        if isApplicationActive() || restoredPreviousApplication {
+            finishRequest(isAuthorized: false)
+        } else if let activatedProcessIdentifier = activatedApplication?.processIdentifier {
+            inactiveActivationCandidate = activatedProcessIdentifier
+            inactiveActivationTime = currentTime()
+        }
     }
 
     private func finishRequest(isAuthorized: Bool) {
         isWaitingForSystemDialog = false
         applicationActiveBeforeRequest = nil
+        inactiveActivationCandidate = nil
+        inactiveActivationTime = nil
         if isObservingDialogDismissal {
             workspaceNotificationCenter.removeObserver(
                 self,
