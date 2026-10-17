@@ -180,7 +180,7 @@ enum HistoryPickerLayout {
 
     static func listHeight(for model: HistoryPickerModel) -> CGFloat {
         let availableHeight = availableListHeight
-        return min(desiredListHeight(for: model), availableHeight)
+        return min(requiredListHeight(for: model), availableHeight)
     }
 
     static func thumbnailDisplaySize(
@@ -216,7 +216,7 @@ enum HistoryPickerLayout {
         )
     }
 
-    private static var availableListHeight: CGFloat {
+    static var availableListHeight: CGFloat {
         maximumHeight
             - headerHeight
             - footerHeight
@@ -230,7 +230,7 @@ enum HistoryPickerLayout {
             + listHeight(for: model)
     }
 
-    private static func desiredListHeight(for model: HistoryPickerModel) -> CGFloat {
+    static func requiredListHeight(for model: HistoryPickerModel) -> CGFloat {
         guard !model.entries.isEmpty else { return emptyListHeight }
 
         let rowsHeight = model.entries.reduce(CGFloat.zero) { height, entry in

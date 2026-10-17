@@ -211,10 +211,14 @@ final class HistoryPickerTests: XCTestCase {
         }
         let model = HistoryPickerModel(entries: entries)
 
+        let requiredHeight = HistoryPickerLayout.requiredListHeight(for: model)
+
         XCTAssertLessThanOrEqual(
-            HistoryPickerLayout.contentSize(for: model).height,
-            HistoryPickerLayout.maximumHeight
+            requiredHeight,
+            HistoryPickerLayout.availableListHeight,
+            "All four image rows, their spacing, and list padding must fit without scrolling"
         )
+        XCTAssertEqual(HistoryPickerLayout.listHeight(for: model), requiredHeight)
     }
 
     func testThumbnailAreaUsesAtLeastHalfOfPickerWidth() {
